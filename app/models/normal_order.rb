@@ -1,0 +1,2 @@
+class NormalOrder < ProductionOrder
+end
