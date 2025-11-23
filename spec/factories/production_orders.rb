@@ -1,11 +1,17 @@
 FactoryBot.define do
   factory :production_order do
-    type { "" }
-    order_number { 1 }
-    start_date { "2025-11-23" }
-    expected_end_date { "2025-11-23" }
-    status { 1 }
-    deadline { "2025-11-23" }
-    creator { nil }
+    start_date { Date.today }
+    expected_end_date { Date.today + 5.days }
+    status { :pending }
+    association :user
+    
+    factory :normal_order, class: 'NormalOrder' do
+      type { 'NormalOrder' }
+    end
+    
+    factory :urgent_order, class: 'UrgentOrder' do
+      type { 'UrgentOrder' }
+      deadline { Date.today + 7.days }
+    end
   end
 end

@@ -1,8 +1,16 @@
 FactoryBot.define do
   factory :task do
-    description { "MyText" }
-    expected_end_date { "2025-11-23" }
-    status { 1 }
-    production_order { nil }
+    description { Faker::Lorem.sentence }
+    expected_end_date { Date.today + 3.days }
+    status { :pending }
+    association :production_order
+    
+    trait :completed do
+      status { :completed }
+    end
+    
+    trait :expired do
+      expected_end_date { Date.yesterday }
+    end
   end
 end
