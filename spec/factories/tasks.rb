@@ -3,7 +3,7 @@ FactoryBot.define do
     description { Faker::Lorem.sentence }
     expected_end_date { Date.today + 3.days }
     status { :pending }
-    association :production_order
+    association :production_order, factory: :normal_order
     
     trait :completed do
       status { :completed }
