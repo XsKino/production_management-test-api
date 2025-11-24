@@ -1,15 +1,16 @@
 class Api::V1::UsersController < Api::V1::ApplicationController
   before_action :set_user, only: [:show, :update, :destroy]
-  before_action :authorize_user_management, except: [:show]
 
   # GET /api/v1/users
   def index
-    @users = User.all
-    
+    authorize User
+
+    @users = policy_scope(User)
+
     # Apply basic filtering if needed
     @users = @users.where(role: params[:role]) if params[:role].present?
     @users = @users.where('name ILIKE ? OR email ILIKE ?', "%#{params[:search]}%", "%#{params[:search]}%") if params[:search].present?
-    
+
     # Apply pagination
     @users = paginate_collection(@users)
 
@@ -23,10 +24,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # GET /api/v1/users/:id
   def show
-    # Users can see their own profile, admins can see any profile
-    unless @user == current_user || current_user.admin?
-      return render_error('You are not authorized to view this user', :forbidden)
-    end
+    authorize @user
 
     render_success(serialize_user_detail(@user))
   end
@@ -34,6 +32,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   # POST /api/v1/users
   def create
     @user = User.new(user_params)
+    authorize @user
 
     if @user.save
       render_success(
@@ -52,6 +51,8 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/users/:id
   def update
+    authorize @user
+
     # Users can update their own profile (limited fields), admins can update any user
     update_params = current_user.admin? ? user_params : user_self_update_params
 
@@ -71,6 +72,8 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # DELETE /api/v1/users/:id
   def destroy
+    authorize @user
+
     # Prevent admin from deleting themselves
     if @user == current_user
       return render_error('You cannot delete your own account', :forbidden)
@@ -87,12 +90,6 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   def set_user
     @user = User.find(params[:id])
-  end
-
-  def authorize_user_management
-    unless current_user.admin?
-      render_error('Only administrators can manage users', :forbidden)
-    end
   end
 
   def user_params

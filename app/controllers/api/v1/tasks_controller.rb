@@ -5,6 +5,7 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   # POST /api/v1/production_orders/:production_order_id/tasks
   def create
     @task = @production_order.tasks.build(task_params)
+    authorize @task
 
     if @task.save
       render_success(
@@ -23,6 +24,8 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:production_order_id/tasks/:id
   def update
+    authorize @task
+
     if @task.update(task_params)
       render_success(
         serialize_task(@task),
@@ -39,6 +42,8 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # DELETE /api/v1/production_orders/:production_order_id/tasks/:id
   def destroy
+    authorize @task
+
     if @task.destroy
       render_success(nil, 'Task deleted successfully')
     else
@@ -48,6 +53,8 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/complete
   def complete
+    authorize @task, :complete?
+
     if @task.update(status: :completed)
       render_success(
         serialize_task(@task),
@@ -62,8 +69,10 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     end
   end
 
-  # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/reopen  
+  # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/reopen
   def reopen
+    authorize @task, :reopen?
+
     if @task.update(status: :pending)
       render_success(
         serialize_task(@task),
@@ -81,27 +90,11 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   private
 
   def set_production_order
-    # TODO: Apply Pundit authorization here
-    @production_order = authorized_orders.find(params[:production_order_id])
+    @production_order = policy_scope(ProductionOrder).find(params[:production_order_id])
   end
 
   def set_task
     @task = @production_order.tasks.find(params[:id])
-  end
-
-  def authorized_orders
-    # TODO: Replace with Pundit policy scopes
-    # For now, basic authorization based on user role
-    case current_user.role
-    when 'admin'
-      ProductionOrder.all
-    when 'production_manager', 'operator'
-      ProductionOrder.joins(:order_assignments)
-                    .where(order_assignments: { user_id: current_user.id })
-                    .or(ProductionOrder.where(creator_id: current_user.id))
-    else
-      ProductionOrder.none
-    end
   end
 
   def task_params

@@ -2,13 +2,17 @@ class Api::V1::ApplicationController < ActionController::API
   include ActionController::HttpAuthentication::Token::ControllerMethods
   include Api::ErrorHandling
   include Api::ResponseHelpers
-  
+  include Pundit::Authorization
+
   # Pagination settings
   ITEMS_PER_PAGE = 20
   MAX_ITEMS_PER_PAGE = 100
 
   before_action :authenticate_request
   before_action :set_default_response_format
+
+  # Pundit authorization error handling
+  rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
   protected
 
@@ -34,6 +38,10 @@ class Api::V1::ApplicationController < ActionController::API
 
   def set_default_response_format
     request.format = :json
+  end
+
+  def user_not_authorized
+    render_error('You are not authorized to perform this action', :forbidden, nil, 'FORBIDDEN')
   end
 
   # Pagination helper

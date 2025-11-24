@@ -31,6 +31,6 @@
 # Ignore key files for decrypting credentials and more.
 /config/*.key
 
-CLAUDE.md
-CHECKLIST.md
-requirements.pdf
+# CLAUDE.md
+# CHECKLIST.md
+# requirements.pdf

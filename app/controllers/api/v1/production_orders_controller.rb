@@ -3,22 +3,23 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   before_action :set_order_type, only: [:index, :create]
 
   # GET /api/v1/production_orders
-  # GET /api/v1/normal_orders  
+  # GET /api/v1/normal_orders
   # GET /api/v1/urgent_orders
   def index
-    # Start with base scope based on user permissions (will implement with Pundit later)
-    # TODO: implement Pundit
-    @orders = authorized_orders
-    
+    authorize ProductionOrder
+
+    # Apply Pundit scope
+    @orders = policy_scope(ProductionOrder)
+
     # Apply type filter if accessing specific order type routes
     @orders = @orders.where(type: @order_type) if @order_type
-    
+
     # Apply Ransack filtering
     @orders = apply_ransack_filters(@orders, order_ransack_params)
-    
+
     # Apply pagination
     @orders = paginate_collection(@orders.includes(:creator, :assigned_users, :tasks))
-    
+
     # Prepare response with pagination metadata
     render_success(
       serialize_orders(@orders),
@@ -30,6 +31,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id
   def show
+    authorize @production_order
     render_success(serialize_order_with_tasks(@production_order))
   end
 
@@ -40,7 +42,9 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     order_class = @order_type&.constantize || NormalOrder
     @production_order = order_class.new(production_order_params)
     @production_order.creator = current_user
-    
+
+    authorize @production_order
+
     if @production_order.save
       # Assign users if provided
       assign_users if order_assignment_params[:user_ids].present?
@@ -61,6 +65,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:id
   def update
+    authorize @production_order
+
     if @production_order.update(production_order_params)
       # Update assignments if provided
       update_assignments if order_assignment_params[:user_ids]
@@ -80,6 +86,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # DELETE /api/v1/production_orders/:id
   def destroy
+    authorize @production_order
+
     if @production_order.destroy
       render_success(nil, 'Production order deleted successfully')
     else
@@ -89,6 +97,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id/tasks_summary
   def tasks_summary
+    authorize @production_order, :tasks_summary?
+
     summary = {
       order: serialize_order(@production_order),
       tasks_summary: {
@@ -107,11 +117,13 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/monthly_statistics
   def monthly_statistics
+    authorize ProductionOrder, :monthly_statistics?
+
     current_month_start = Date.current.beginning_of_month
     current_month_end = Date.current.end_of_month
-    
+
     # Get orders accessible to current user
-    base_orders = authorized_orders
+    base_orders = policy_scope(ProductionOrder)
     
     stats = {
       current_month: {
@@ -131,10 +143,12 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     render_success(stats)
   end
 
-  # GET /api/v1/production_orders/urgent_orders_report  
+  # GET /api/v1/production_orders/urgent_orders_report
   def urgent_orders_report
+    authorize ProductionOrder, :urgent_orders_report?
+
     # Complex query for urgent orders with task statistics
-    urgent_orders_with_stats = authorized_orders
+    urgent_orders_with_stats = policy_scope(ProductionOrder)
       .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id")
       .where(type: 'UrgentOrder')
       .select(
@@ -174,8 +188,10 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/urgent_with_expired_tasks
   def urgent_with_expired_tasks
+    authorize ProductionOrder, :urgent_with_expired_tasks?
+
     # Find urgent orders with at least one pending task that's overdue
-    urgent_orders_with_expired = authorized_orders
+    urgent_orders_with_expired = policy_scope(ProductionOrder)
       .joins(:tasks)
       .where(type: 'UrgentOrder')
       .where(tasks: { 
@@ -207,7 +223,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   private
 
   def set_production_order
-    @production_order = authorized_orders.find(params[:id])
+    @production_order = policy_scope(ProductionOrder).find(params[:id])
   end
 
   def set_order_type
@@ -220,21 +236,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
                   else
                     params[:production_order]&.[](:type) || params[:type]
                   end
-  end
-
-  def authorized_orders
-    # TODO: Replace with Pundit policy scopes
-    # For now, basic authorization based on user role
-    case current_user.role
-    when 'admin'
-      ProductionOrder.all
-    when 'production_manager', 'operator'
-      ProductionOrder.joins(:order_assignments)
-                    .where(order_assignments: { user_id: current_user.id })
-                    .or(ProductionOrder.where(creator_id: current_user.id))
-    else
-      ProductionOrder.none
-    end
   end
 
   def production_order_params
