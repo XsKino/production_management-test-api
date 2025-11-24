@@ -101,22 +101,16 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   end
 
   def serialize_users(users)
-    users.map { |user| serialize_user(user) }
+    UserSerializer.new(users).serializable_hash[:data].map { |u| u[:attributes] }
   end
 
   def serialize_user(user)
-    {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      created_at: user.created_at,
-      updated_at: user.updated_at
-    }
+    UserSerializer.new(user).serializable_hash[:data][:attributes]
   end
 
   def serialize_user_detail(user)
-    serialize_user(user).merge({
+    serialized = UserSerializer.new(user).serializable_hash[:data][:attributes]
+    serialized.merge({
       statistics: {
         created_orders_count: user.created_orders.count,
         assigned_orders_count: user.assigned_orders.count,

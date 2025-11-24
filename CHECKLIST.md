@@ -118,6 +118,15 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] Códigos de error documentados
 - [x] Filtros Ransack documentados
 
+### Background Jobs (Sidekiq)
+
+- [x] **Configurar Sidekiq y Redis**
+- [x] **Job para envío de notificaciones de tareas vencidas (ExpiredTasksNotificationJob)**
+- [x] **Job para envío de recordatorios de deadlines (UrgentDeadlineReminderJob)**
+- [x] **Scheduling automático con Whenever (cron jobs)**
+- [x] **Documentación de scheduling (SCHEDULING.md)**
+- [x] **Tests de jobs (12 tests)**
+
 ## ❌ Pendiente
 
 ### Funcionalidades de Negocio
@@ -129,19 +138,15 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Notificaciones para órdenes urgentes próximas a deadline (implementado con Sidekiq)**
 - [ ] Logs de auditoría para cambios en órdenes
 
-### Background Jobs (Sidekiq)
-
-- [x] **Configurar Sidekiq y Redis**
-- [x] **Job para envío de notificaciones de tareas vencidas (ExpiredTasksNotificationJob)**
-- [x] **Job para envío de recordatorios de deadlines (UrgentDeadlineReminderJob)**
-- [x] **Scheduling automático con Whenever (cron jobs)**
-- [x] **Documentación de scheduling (SCHEDULING.md)**
-- [ ] Job para generación de reportes periódicos
-- [x] **Tests de jobs (12 tests)**
-
 ### Optimizaciones
 
-- [ ] Implementar fast_jsonapi para serialización (gem ya instalada, serialización manual actual funciona)
+- [x] **Implementar fast_jsonapi para serialización**
+  - UserSerializer
+  - ProductionOrderSerializer (base para STI)
+  - NormalOrderSerializer
+  - UrgentOrderSerializer
+  - TaskSerializer
+  - Todos los controladores actualizados
 - [ ] Agregar índices adicionales para queries comunes
 - [ ] Implementar caché para estadísticas mensuales
 - [ ] N+1 query prevention con bullet gem

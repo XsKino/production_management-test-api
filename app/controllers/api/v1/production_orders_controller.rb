@@ -285,39 +285,26 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # Serialization methods
   def serialize_orders(orders)
-    orders.map { |order| serialize_order(order) }
+    serializer_class = orders.first&.class == UrgentOrder ? UrgentOrderSerializer : ProductionOrderSerializer
+    serializer_class.new(orders, include: [:creator, :assigned_users])
+                    .serializable_hash[:data]
+                    .map { |o| format_order_data(o) }
   end
 
   def serialize_order(order)
-    {
-      id: order.id,
-      order_number: order.order_number,
-      type: order.type,
-      start_date: order.start_date,
-      expected_end_date: order.expected_end_date,
-      deadline: order.try(:deadline),
-      status: order.status,
-      created_at: order.created_at,
-      updated_at: order.updated_at,
-      creator: {
-        id: order.creator.id,
-        name: order.creator.name,
-        email: order.creator.email
-      },
-      assigned_users: order.assigned_users.map do |user|
-        {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        }
-      end
-    }
+    serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
+    data = serializer_class.new(order, include: [:creator, :assigned_users])
+                           .serializable_hash
+    format_order_data(data[:data])
   end
 
   def serialize_order_with_tasks(order)
-    serialize_order(order).merge({
-      tasks: order.tasks.map { |task| serialize_task(task) },
+    serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
+    data = serializer_class.new(order, include: [:creator, :assigned_users, :tasks])
+                           .serializable_hash
+    formatted = format_order_data(data[:data], data[:included])
+
+    formatted.merge({
       tasks_summary: {
         total: order.tasks.count,
         pending: order.tasks.pending.count,
@@ -328,15 +315,45 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   end
 
   def serialize_task(task)
-    {
-      id: task.id,
-      description: task.description,
-      expected_end_date: task.expected_end_date,
-      status: task.status,
-      is_overdue: task.expected_end_date < Date.current && task.pending?,
-      created_at: task.created_at,
-      updated_at: task.updated_at
-    }
+    TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
+      is_overdue: task.expected_end_date < Date.current && task.pending?
+    })
+  end
+
+  private
+
+  def format_order_data(data, included = nil)
+    attributes = data[:attributes]
+    relationships = data[:relationships] || {}
+
+    result = attributes.dup
+
+    # Format creator
+    if relationships[:creator] && included
+      creator_data = included.find { |i| i[:type] == :user && i[:id] == relationships[:creator][:data][:id].to_s }
+      result[:creator] = creator_data[:attributes] if creator_data
+    end
+
+    # Format assigned_users
+    if relationships[:assigned_users] && included
+      result[:assigned_users] = relationships[:assigned_users][:data].map do |user_ref|
+        user_data = included.find { |i| i[:type] == :user && i[:id] == user_ref[:id].to_s }
+        user_data[:attributes] if user_data
+      end.compact
+    end
+
+    # Format tasks if included
+    if relationships[:tasks] && included
+      result[:tasks] = relationships[:tasks][:data].map do |task_ref|
+        task_data = included.find { |i| i[:type] == :task && i[:id] == task_ref[:id].to_s }
+        task_data[:attributes].merge({
+          is_overdue: task_data[:attributes][:expected_end_date] < Date.current &&
+                     task_data[:attributes][:status] == 'pending'
+        }) if task_data
+      end.compact
+    end
+
+    result
   end
 
   def calculate_completion_percentage(order)

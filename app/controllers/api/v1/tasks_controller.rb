@@ -102,15 +102,8 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   end
 
   def serialize_task(task)
-    {
-      id: task.id,
-      description: task.description,
-      expected_end_date: task.expected_end_date,
-      status: task.status,
-      is_overdue: task.expected_end_date < Date.current && task.pending?,
-      production_order_id: task.production_order_id,
-      created_at: task.created_at,
-      updated_at: task.updated_at
-    }
+    TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
+      is_overdue: task.expected_end_date < Date.current && task.pending?
+    })
   end
 end
