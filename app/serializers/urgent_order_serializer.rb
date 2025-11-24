@@ -6,7 +6,7 @@ class UrgentOrderSerializer < ProductionOrderSerializer
 
   # Add days until deadline
   attribute :days_until_deadline do |order|
-    return nil unless order.deadline
+    next nil unless order.deadline
     (order.deadline - Date.current).to_i
   end
 end

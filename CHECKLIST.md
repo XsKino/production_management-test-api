@@ -136,7 +136,13 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Cálculo automático de order_number al cambiar tipo de orden**
 - [x] **Notificaciones para tareas vencidas (implementado con Sidekiq)**
 - [x] **Notificaciones para órdenes urgentes próximas a deadline (implementado con Sidekiq)**
-- [ ] Logs de auditoría para cambios en órdenes
+- [x] **Logs de auditoría para cambios en órdenes**
+  - Modelo OrderAuditLog con tracking completo
+  - Concern Auditable para logging automático (create, update, delete)
+  - Detección de cambios específicos (status_changed, type_changed)
+  - Endpoint GET /api/v1/production_orders/:id/audit_logs
+  - Contexto de auditoría (Current.user, IP, User Agent)
+  - 24 tests para auditoría
 
 ### Optimizaciones
 
@@ -176,7 +182,7 @@ Basado en requirements.pdf y análisis del código actual.
 
 - ✅ Modelos y relaciones: 100%
 - ✅ API CRUD completo: 100%
-- ✅ Tests: 100% (229 tests passing)
+- ✅ Tests: 100% (253 tests passing)
 - ✅ Autenticación JWT: 100%
 - ✅ **Autorización granular con Pundit: 100%**
 - ✅ **Validaciones de fechas: 100%**

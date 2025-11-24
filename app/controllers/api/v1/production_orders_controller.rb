@@ -1,5 +1,5 @@
 class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
-  before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary]
+  before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary, :audit_logs]
   before_action :set_order_type, only: [:index, :create]
 
   # GET /api/v1/production_orders
@@ -107,12 +107,31 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
         completed_tasks: @production_order.tasks.completed.count,
         completion_percentage: calculate_completion_percentage(@production_order),
         latest_pending_task_date: @production_order.tasks.pending.maximum(:expected_end_date),
-        overdue_tasks: @production_order.tasks.where('expected_end_date < ? AND status = ?', 
+        overdue_tasks: @production_order.tasks.where('expected_end_date < ? AND status = ?',
                                                     Date.current, Task.statuses[:pending]).count
       }
     }
-    
+
     render_success(summary)
+  end
+
+  # GET /api/v1/production_orders/:id/audit_logs
+  def audit_logs
+    authorize @production_order, :show?
+
+    @audit_logs = @production_order.audit_logs
+                                   .includes(:user)
+                                   .recent
+
+    # Apply pagination
+    @audit_logs = paginate_collection(@audit_logs)
+
+    render_success(
+      serialize_audit_logs(@audit_logs),
+      nil,
+      :ok,
+      pagination_meta(@audit_logs)
+    )
   end
 
   # GET /api/v1/production_orders/monthly_statistics
@@ -239,12 +258,12 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   end
 
   def production_order_params
-    permitted_params = [:start_date, :expected_end_date, :status, 
+    permitted_params = [:start_date, :expected_end_date, :status,
                        tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
-    
+
     # Add deadline for urgent orders
-    permitted_params << :deadline if @order_type == 'UrgentOrder' || params[:production_order][:type] == 'UrgentOrder'
-    
+    permitted_params << :deadline if @order_type == 'UrgentOrder' || params.dig(:production_order, :type) == 'UrgentOrder'
+
     params.require(:production_order).permit(permitted_params)
   end
 
@@ -360,5 +379,23 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     return 0 if order.tasks.count.zero?
 
     (order.tasks.completed.count.to_f / order.tasks.count * 100).round(2)
+  end
+
+  def serialize_audit_logs(audit_logs)
+    audit_logs.map do |log|
+      {
+        id: log.id,
+        action: log.action,
+        change_details: log.change_details,
+        user: {
+          id: log.user.id,
+          name: log.user.name,
+          email: log.user.email
+        },
+        ip_address: log.ip_address,
+        user_agent: log.user_agent,
+        created_at: log.created_at
+      }
+    end
   end
 end

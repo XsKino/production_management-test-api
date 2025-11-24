@@ -1,11 +1,14 @@
 class ProductionOrder < ApplicationRecord
+  include Auditable
+
   belongs_to :creator, class_name: 'User'
   
   has_many :order_assignments, dependent: :destroy
   has_many :assigned_users, through: :order_assignments, source: :user
   
   has_many :tasks, dependent: :destroy
-  
+  has_many :audit_logs, class_name: 'OrderAuditLog', dependent: :nullify
+
   accepts_nested_attributes_for :tasks, allow_destroy: true
   
   enum :status, { pending: 0, completed: 1, cancelled: 2 }

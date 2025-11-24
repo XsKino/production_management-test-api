@@ -29,6 +29,7 @@ The API uses **Pundit** for granular authorization. There are three user roles w
 | **Update order**    | ✅ Any order | ✅ Assigned/created orders only | ❌ No                |
 | **Delete order**    | ✅ Any order | ✅ Created orders only          | ❌ No                |
 | **View statistics** | ✅ Yes       | ✅ Yes                          | ✅ Yes               |
+| **View audit logs** | ✅ Any order | ✅ Assigned/created orders only | ✅ Assigned orders   |
 
 ### Tasks Permissions
 
@@ -561,6 +562,142 @@ Authorization: Bearer <token>
     "pending_tasks": 3,
     "completion_percentage": 40.0,
     "overdue_tasks": 1
+  }
+}
+```
+
+---
+
+### GET /production_orders/:id/audit_logs
+
+Get audit logs for a specific production order. Shows all changes made to the order including who made the change, when, and what changed.
+
+**Authorization:** Admin can view any order's logs. Production Managers can view logs for orders they created or are assigned to. Operators can view logs for orders they're assigned to.
+
+**Request:**
+
+```
+GET /api/v1/production_orders/1/audit_logs
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+
+- `page` (optional): Page number for pagination (default: 1)
+- `per_page` (optional): Items per page (default: 20, max: 100)
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 15,
+      "action": "status_changed",
+      "change_details": {
+        "status": {
+          "from": "pending",
+          "to": "completed"
+        }
+      },
+      "user": {
+        "id": 2,
+        "name": "John Manager",
+        "email": "manager@example.com"
+      },
+      "ip_address": "192.168.1.100",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "created_at": "2025-01-15T10:30:00.000Z"
+    },
+    {
+      "id": 12,
+      "action": "type_changed",
+      "change_details": {
+        "type": {
+          "from": "NormalOrder",
+          "to": "UrgentOrder"
+        },
+        "order_number": {
+          "from": 1,
+          "to": 2
+        }
+      },
+      "user": {
+        "id": 1,
+        "name": "Admin User",
+        "email": "admin@example.com"
+      },
+      "ip_address": "192.168.1.50",
+      "user_agent": "PostmanRuntime/7.32.0",
+      "created_at": "2025-01-14T14:20:00.000Z"
+    },
+    {
+      "id": 8,
+      "action": "created",
+      "change_details": {
+        "order_number": 1,
+        "type": "NormalOrder",
+        "status": "pending",
+        "start_date": "2025-01-10",
+        "expected_end_date": "2025-01-20"
+      },
+      "user": {
+        "id": 2,
+        "name": "John Manager",
+        "email": "manager@example.com"
+      },
+      "ip_address": "192.168.1.100",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      "created_at": "2025-01-10T09:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 2,
+      "total_count": 25,
+      "per_page": 20,
+      "has_next_page": true,
+      "has_prev_page": false
+    }
+  }
+}
+```
+
+**Available Actions:**
+
+- `created` - Order was created
+- `updated` - General update to order fields
+- `deleted` - Order was deleted
+- `status_changed` - Order status was changed
+- `type_changed` - Order type was changed (NormalOrder ↔ UrgentOrder)
+- `assigned` - User was assigned to order
+- `unassigned` - User was unassigned from order
+- `task_added` - Task was added to order
+- `task_updated` - Task was updated
+- `task_deleted` - Task was deleted
+
+**Response (403 Forbidden):**
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "You are not authorized to perform this action"
+  }
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Resource not found"
   }
 }
 ```
@@ -1220,4 +1357,5 @@ Common error codes returned by the API:
 - JWT tokens expire after 24 hours
 - All requests must include `Content-Type: application/json` header for POST/PUT/PATCH requests
 - Order numbers are automatically generated with format: `NO-YYYY-XXX` (NormalOrder) or `UO-YYYY-XXX` (UrgentOrder)
+- **Audit Logging**: All changes to production orders are automatically tracked with user information, IP address, and timestamp. Audit logs are preserved even when orders are deleted.
 - Pagination defaults to 20 items per page, maximum 100 items per page

@@ -19,6 +19,7 @@ Rails.application.routes.draw do
       resources :production_orders do
         member do
           get :tasks_summary
+          get :audit_logs
         end
         
         # Nested tasks routes

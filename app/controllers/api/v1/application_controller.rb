@@ -10,6 +10,7 @@ class Api::V1::ApplicationController < ActionController::API
 
   before_action :authenticate_request, except: [:health]
   before_action :set_default_response_format
+  before_action :set_current_attributes
 
   # Pundit authorization error handling
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
@@ -47,6 +48,12 @@ class Api::V1::ApplicationController < ActionController::API
 
   def set_default_response_format
     request.format = :json
+  end
+
+  def set_current_attributes
+    Current.user = current_user if @current_user
+    Current.ip_address = request.remote_ip
+    Current.user_agent = request.user_agent
   end
 
   def user_not_authorized
