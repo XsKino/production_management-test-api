@@ -11,4 +11,14 @@ class User < ApplicationRecord
   validates :email, presence: true, uniqueness: true
   validates :name, presence: true
   validates :role, presence: true
+
+  # Ransack: Define searchable attributes
+  def self.ransackable_attributes(auth_object = nil)
+    ["created_at", "email", "id", "name", "role", "updated_at"]
+  end
+
+  # Ransack: Define searchable associations
+  def self.ransackable_associations(auth_object = nil)
+    ["assigned_orders", "created_orders", "order_assignments"]
+  end
 end

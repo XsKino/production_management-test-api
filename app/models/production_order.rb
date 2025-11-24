@@ -22,7 +22,17 @@ class ProductionOrder < ApplicationRecord
     return true if user.admin?
     creator_id == user.id || assigned_users.include?(user)
   end
-  
+
+  # Ransack: Define searchable attributes
+  def self.ransackable_attributes(auth_object = nil)
+    ["created_at", "creator_id", "deadline", "expected_end_date", "id", "order_number", "start_date", "status", "type", "updated_at"]
+  end
+
+  # Ransack: Define searchable associations
+  def self.ransackable_associations(auth_object = nil)
+    ["assigned_users", "creator", "order_assignments", "tasks"]
+  end
+
   private
   
   # Autoincremental index based on 'type'

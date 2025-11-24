@@ -4,15 +4,16 @@ gem "rails", "~> 8.1.1"
 gem "mysql2", "~> 0.5"
 gem "puma", ">= 5.0"
 
-# Autenticación
+# Auth
 gem "bcrypt", "~> 3.1.7"
-
-# Autorización
 gem "pundit"
 
-# Filtrado y Paginación
+# Filtering and Pagination
 gem "ransack"
 gem "kaminari"
+
+# CORS handling for API
+gem 'rack-cors'
 
 # Background Jobs
 gem "sidekiq"
@@ -23,6 +24,7 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 
 # Performance
 gem "bootsnap", require: false
+gem 'fast_jsonapi'
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
