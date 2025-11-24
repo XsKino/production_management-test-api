@@ -52,7 +52,7 @@ class Api::V1::ApplicationController < ActionController::API
 
   def filter_params(allowed_params = {})
     return {} unless params[:q]
-    
+
     # Default allowed ransack params for production orders
     default_allowed = {
       status_eq: nil,
@@ -64,15 +64,29 @@ class Api::V1::ApplicationController < ActionController::API
       creator_id_eq: nil,
       order_number_eq: nil
     }
-    
+
     allowed = default_allowed.merge(allowed_params)
     params[:q].permit(allowed.keys)
   end
 
+  # Pagination metadata helper
+  def pagination_meta(collection)
+    {
+      pagination: {
+        current_page: collection.current_page,
+        total_pages: collection.total_pages,
+        total_count: collection.total_count,
+        per_page: collection.limit_value,
+        has_next_page: collection.next_page.present?,
+        has_prev_page: collection.prev_page.present?
+      }
+    }
+  end
+
   # Health check endpoint
   def health
-    render json: { 
-      status: 'ok', 
+    render json: {
+      status: 'ok',
       timestamp: Time.current,
       version: '1.0.0'
     }

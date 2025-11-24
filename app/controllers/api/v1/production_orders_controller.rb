@@ -340,20 +340,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   def calculate_completion_percentage(order)
     return 0 if order.tasks.count.zero?
-    
-    (order.tasks.completed.count.to_f / order.tasks.count * 100).round(2)
-  end
 
-  def pagination_meta(collection)
-    {
-      pagination: {
-        current_page: collection.current_page,
-        total_pages: collection.total_pages,
-        total_count: collection.total_count,
-        per_page: collection.limit_value,
-        has_next_page: collection.next_page.present?,
-        has_prev_page: collection.prev_page.present?
-      }
-    }
+    (order.tasks.completed.count.to_f / order.tasks.count * 100).round(2)
   end
 end
