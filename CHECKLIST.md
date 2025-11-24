@@ -99,7 +99,7 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Policy specs para ProductionOrderPolicy (36 tests)**
 - [x] **Policy specs para TaskPolicy (37 tests)**
 - [x] Factories con FactoryBot
-- [x] **200 tests pasando exitosamente (113 originales + 87 de policies)**
+- [x] **229 tests pasando exitosamente (includes model, controller, integration, policy, job, and mailer specs)**
 
 ### Infraestructura
 
@@ -133,7 +133,7 @@ Basado en requirements.pdf y análisis del código actual.
 
 - [x] **Validación de que deadline de UrgentOrder no puede ser anterior a start_date**
 - [x] **Validación de que expected_end_date no puede ser anterior a start_date**
-- [ ] Cálculo automático de order_number al cambiar tipo de orden
+- [x] **Cálculo automático de order_number al cambiar tipo de orden**
 - [x] **Notificaciones para tareas vencidas (implementado con Sidekiq)**
 - [x] **Notificaciones para órdenes urgentes próximas a deadline (implementado con Sidekiq)**
 - [ ] Logs de auditoría para cambios en órdenes
@@ -176,7 +176,7 @@ Basado en requirements.pdf y análisis del código actual.
 
 - ✅ Modelos y relaciones: 100%
 - ✅ API CRUD completo: 100%
-- ✅ Tests: 100% (218 tests passing - 113 originales + 87 policies + 6 date validations + 12 jobs)
+- ✅ Tests: 100% (229 tests passing)
 - ✅ Autenticación JWT: 100%
 - ✅ **Autorización granular con Pundit: 100%**
 - ✅ **Validaciones de fechas: 100%**

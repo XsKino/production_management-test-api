@@ -96,8 +96,73 @@ RSpec.describe ProductionOrder, type: :model do
     it 'allows same order_number for different types' do
       normal_order = create(:normal_order, creator: creator)
       urgent_order = build(:urgent_order, creator: creator, order_number: normal_order.order_number)
-      
+
       expect(urgent_order).to be_valid
+    end
+
+    context 'when type changes' do
+      it 'recalculates order_number when changing from NormalOrder to UrgentOrder' do
+        # Create some orders
+        normal_order1 = create(:normal_order, creator: creator)
+        normal_order2 = create(:normal_order, creator: creator)
+        urgent_order1 = create(:urgent_order, creator: creator)
+
+        # Change normal_order1 to UrgentOrder
+        normal_order1.update!(type: 'UrgentOrder')
+        reloaded = ProductionOrder.find(normal_order1.id)
+
+        # Should get the next order_number for UrgentOrder (which is 2, since urgent_order1 has 1)
+        expect(reloaded.order_number).to eq(2)
+        expect(reloaded.type).to eq('UrgentOrder')
+      end
+
+      it 'recalculates order_number when changing from UrgentOrder to NormalOrder' do
+        # Create some orders
+        urgent_order1 = create(:urgent_order, creator: creator)
+        urgent_order2 = create(:urgent_order, creator: creator)
+        normal_order1 = create(:normal_order, creator: creator)
+
+        # Change urgent_order1 to NormalOrder
+        urgent_order1.update!(type: 'NormalOrder')
+        reloaded = ProductionOrder.find(urgent_order1.id)
+
+        # Should get the next order_number for NormalOrder (which is 2, since normal_order1 has 1)
+        expect(reloaded.order_number).to eq(2)
+        expect(reloaded.type).to eq('NormalOrder')
+      end
+
+      it 'assigns correct order_number when no orders of target type exist' do
+        # Create only NormalOrders
+        normal_order1 = create(:normal_order, creator: creator)
+        normal_order2 = create(:normal_order, creator: creator)
+
+        # Change normal_order1 to UrgentOrder (no UrgentOrders exist yet)
+        normal_order1.update!(type: 'UrgentOrder')
+        reloaded = ProductionOrder.find(normal_order1.id)
+
+        # Should get order_number 1 for UrgentOrder
+        expect(reloaded.order_number).to eq(1)
+        expect(reloaded.type).to eq('UrgentOrder')
+      end
+
+      it 'maintains uniqueness validation after type change' do
+        # Create orders
+        normal_order1 = create(:normal_order, creator: creator)
+        normal_order2 = create(:normal_order, creator: creator)
+        urgent_order1 = create(:urgent_order, creator: creator)
+
+        # Change normal_order1 to UrgentOrder (should get order_number 2)
+        normal_order1.update!(type: 'UrgentOrder')
+        reloaded = ProductionOrder.find(normal_order1.id)
+        expect(reloaded.order_number).to eq(2)
+
+        # Try to manually set it to an existing UrgentOrder number should fail
+        normal_order2.type = 'UrgentOrder'
+        normal_order2.order_number = 1 # urgent_order1 has this
+
+        expect(normal_order2).not_to be_valid
+        expect(normal_order2.errors[:order_number]).to include('has already been taken')
+      end
     end
   end
 
