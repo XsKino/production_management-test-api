@@ -25,7 +25,8 @@ Rails.application.configure do
   # config.assume_ssl = true
 
   # Force all access to the app over SSL, use Strict-Transport-Security, and use secure cookies.
-  # config.force_ssl = true
+  # Configurable via ENV for flexibility (local ngrok vs cloud deployment)
+  config.force_ssl = ENV.fetch('FORCE_SSL', 'false') == 'true'
 
   # Skip http-to-https redirect for the default health check endpoint.
   # config.ssl_options = { redirect: { exclude: ->(request) { request.path == "/up" } } }
@@ -44,11 +45,15 @@ Rails.application.configure do
   config.active_support.report_deprecations = false
 
   # Replace the default in-process memory cache store with a durable alternative.
-  config.cache_store = :solid_cache_store
+  # Use Redis for cache (better for distributed systems and demo purposes)
+  config.cache_store = :redis_cache_store, {
+    url: ENV.fetch('REDIS_URL', 'redis://localhost:6379/1'),
+    expires_in: 1.day
+  }
 
   # Replace the default in-process and non-durable queuing backend for Active Job.
-  config.active_job.queue_adapter = :solid_queue
-  config.solid_queue.connects_to = { database: { writing: :queue } }
+  # Use Sidekiq for background jobs (better for demo and production)
+  config.active_job.queue_adapter = :sidekiq
 
   # ActionMailer configuration for SendGrid
   config.action_mailer.raise_delivery_errors = true
@@ -78,11 +83,17 @@ Rails.application.configure do
   config.active_record.attributes_for_inspect = [ :id ]
 
   # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # Disabled for flexibility with ngrok and various deployment platforms
+  config.hosts.clear
+
+  # CORS configuration for frontend access
+  config.middleware.insert_before 0, Rack::Cors do
+    allow do
+      origins ENV.fetch('ALLOWED_ORIGINS', '*').split(',').map(&:strip)
+      resource '*',
+        headers: :any,
+        methods: [:get, :post, :put, :patch, :delete, :options, :head],
+        credentials: false
+    end
+  end
 end

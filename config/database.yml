@@ -55,20 +55,4 @@ test:
 # for a full overview on how database connection configuration can be specified.
 #
 production:
-  primary: &primary_production
-    <<: *default
-    database: kiuey_test_api_production
-    username: kiuey_test_api
-    password: <%= ENV["KIUEY_TEST_API_DATABASE_PASSWORD"] %>
-  cache:
-    <<: *primary_production
-    database: kiuey_test_api_production_cache
-    migrations_paths: db/cache_migrate
-  queue:
-    <<: *primary_production
-    database: kiuey_test_api_production_queue
-    migrations_paths: db/queue_migrate
-  cable:
-    <<: *primary_production
-    database: kiuey_test_api_production_cable
-    migrations_paths: db/cable_migrate
+  url: <%= ENV['DATABASE_URL'] %>

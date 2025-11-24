@@ -203,15 +203,33 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
       .includes(:creator, :assigned_users)
 
     paginated_orders = paginate_collection(urgent_orders_with_stats)
-    
+
+    # Serialize manually without accessing tasks collection
+    # since we have the counts from SQL aggregations
     serialized_orders = paginated_orders.map do |order|
-      serialize_order(order).merge({
+      {
+        id: order.id,
+        type: order.type,
+        order_number: order.order_number,
+        start_date: order.start_date,
+        expected_end_date: order.expected_end_date,
+        deadline: order.deadline,
+        status: order.status,
+        created_at: order.created_at,
+        updated_at: order.updated_at,
+        creator: {
+          id: order.creator.id,
+          name: order.creator.name,
+          email: order.creator.email
+        },
+        assigned_users: order.assigned_users.map { |u| { id: u.id, name: u.name, email: u.email } },
         latest_pending_task_date: order.latest_pending_task_date,
         pending_tasks_count: order.pending_tasks_count.to_i,
         completed_tasks_count: order.completed_tasks_count.to_i,
         total_tasks_count: order.total_tasks_count.to_i,
-        completion_percentage: order.completion_percentage.to_f
-      })
+        completion_percentage: order.completion_percentage.to_f,
+        days_until_deadline: order.deadline ? (order.deadline - Date.current).to_i : nil
+      }
     end
 
     render_success(

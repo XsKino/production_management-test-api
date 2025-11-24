@@ -5,6 +5,9 @@ Rails.application.routes.draw do
   # Can be used by uptime monitors.
   get "up" => "rails/health#show", as: :rails_health_check
 
+  # Serve API documentation
+  get '/api-docs', to: redirect('/api-docs/index.html')
+
   # Defines the root path route ("/")
   # root "posts#index"
 

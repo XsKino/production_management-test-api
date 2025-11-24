@@ -1,0 +1,1422 @@
+openapi: 3.1.0
+info:
+  title: Kiuey Test API - Production Orders Management
+  description: |
+    Sistema completo de gestión de órdenes de producción con autenticación JWT,
+    autorización por roles (Pundit), background jobs (Sidekiq), y optimizaciones de performance.
+
+    ## Características
+    - 🔐 Autenticación JWT con refresh tokens
+    - 👥 3 roles: admin, production_manager, operator
+    - 📦 Órdenes de producción (Normal y Urgente)
+    - ✅ Gestión de tareas
+    - 📊 Reportes y estadísticas
+    - 🔍 Búsqueda avanzada con Ransack
+    - 📄 Paginación con Kaminari
+    - ⚡ Cache con Redis
+    - 🔄 Background jobs con Sidekiq
+
+    ## Usuarios de Prueba
+
+    ### Admin
+    - Email: `carlos.rodriguez@empresa.com`
+    - Password: `password123`
+
+    ### Production Manager
+    - Email: `roberto.silva@empresa.com`
+    - Password: `password123`
+
+    ### Operator
+    - Email: `miguel.torres@empresa.com`
+    - Password: `password123`
+
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/XsKino/production_management-test-api
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Docker server (default)
+  - url: http://localhost:3000/api/v1
+    description: Local server
+
+tags:
+  - name: Authentication
+    description: JWT authentication endpoints
+  - name: Production Orders
+    description: Manage production orders (Normal and Urgent)
+  - name: Tasks
+    description: Manage tasks within production orders
+  - name: Users
+    description: User management (admin only)
+  - name: Order Assignments
+    description: Assign operators to production orders
+  - name: Reports
+    description: Statistics and reports
+
+paths:
+  # ==========================================
+  # AUTHENTICATION
+  # ==========================================
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login with email and password
+      description: Authenticate user and receive JWT token
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: carlos.rodriguez@empresa.com
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  timestamp:
+                    type: string
+                    format: date-time
+                  message:
+                    type: string
+                    example: Login successful
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                        example: eyJhbGciOiJIUzI1NiJ9...
+                      user:
+                        $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /auth/logout:
+    delete:
+      tags:
+        - Authentication
+      summary: Logout current user
+      description: Invalidate current JWT token
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT token
+      description: Get a new JWT token before expiration
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ==========================================
+  # PRODUCTION ORDERS
+  # ==========================================
+  /production_orders:
+    get:
+      tags:
+        - Production Orders
+      summary: List all production orders
+      description: |
+        Returns paginated list of production orders with filtering and search capabilities.
+        Supports Ransack query syntax for advanced filtering.
+      operationId: listProductionOrders
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Items per page (max 100)
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: q[status_eq]
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [pending, completed, cancelled]
+        - name: q[type_eq]
+          in: query
+          description: Filter by order type
+          schema:
+            type: string
+            enum: [NormalOrder, UrgentOrder]
+        - name: q[start_date_gteq]
+          in: query
+          description: Filter by start date (greater than or equal)
+          schema:
+            type: string
+            format: date
+        - name: q[start_date_lteq]
+          in: query
+          description: Filter by start date (less than or equal)
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: List of production orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductionOrder"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - Production Orders
+      summary: Create a new production order
+      description: Create a new production order with optional nested tasks
+      operationId: createProductionOrder
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionOrderCreate"
+      responses:
+        "201":
+          description: Production order created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ProductionOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /production_orders/{id}:
+    get:
+      tags:
+        - Production Orders
+      summary: Get production order details
+      description: Returns detailed information about a specific production order
+      operationId: getProductionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+      responses:
+        "200":
+          description: Production order details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ProductionOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags:
+        - Production Orders
+      summary: Update production order
+      description: Update an existing production order
+      operationId: updateProductionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductionOrderUpdate"
+      responses:
+        "200":
+          description: Production order updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ProductionOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      tags:
+        - Production Orders
+      summary: Delete production order
+      description: Soft delete a production order
+      operationId: deleteProductionOrder
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+      responses:
+        "200":
+          description: Production order deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /production_orders/{id}/tasks_summary:
+    get:
+      tags:
+        - Production Orders
+      summary: Get tasks summary for an order
+      description: Returns summary of tasks (pending, completed counts)
+      operationId: getTasksSummary
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+      responses:
+        "200":
+          description: Tasks summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      total_tasks:
+                        type: integer
+                      pending_tasks:
+                        type: integer
+                      completed_tasks:
+                        type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ==========================================
+  # REPORTS & STATISTICS
+  # ==========================================
+  /production_orders/monthly_statistics:
+    get:
+      tags:
+        - Reports
+      summary: Get monthly statistics
+      description: |
+        Returns statistics for the current month (cached for performance).
+        Cache expires at the end of the month.
+      operationId: getMonthlyStatistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Monthly statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      month:
+                        type: string
+                        example: "2025-11"
+                      total_orders:
+                        type: integer
+                      normal_orders:
+                        type: integer
+                      urgent_orders:
+                        type: integer
+                      completed_orders:
+                        type: integer
+                      pending_orders:
+                        type: integer
+                      cancelled_orders:
+                        type: integer
+                      total_tasks:
+                        type: integer
+                      completed_tasks:
+                        type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /production_orders/urgent_orders_report:
+    get:
+      tags:
+        - Reports
+      summary: Get urgent orders report
+      description: Returns list of urgent orders with tasks statistics
+      operationId: getUrgentOrdersReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Urgent orders report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductionOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /production_orders/urgent_with_expired_tasks:
+    get:
+      tags:
+        - Reports
+      summary: Get urgent orders with expired tasks
+      description: Returns urgent orders that have tasks past their deadline
+      operationId: getUrgentWithExpiredTasks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+      responses:
+        "200":
+          description: Urgent orders with expired tasks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProductionOrder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ==========================================
+  # TASKS
+  # ==========================================
+  /production_orders/{production_order_id}/tasks:
+    post:
+      tags:
+        - Tasks
+      summary: Create a new task
+      description: Create a new task for a production order
+      operationId: createTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+      responses:
+        "201":
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /production_orders/{production_order_id}/tasks/{id}:
+    patch:
+      tags:
+        - Tasks
+      summary: Update a task
+      description: Update an existing task
+      operationId: updateTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/taskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      tags:
+        - Tasks
+      summary: Delete a task
+      description: Delete a task from a production order
+      operationId: deleteTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/taskId"
+      responses:
+        "200":
+          description: Task deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /production_orders/{production_order_id}/tasks/{id}/complete:
+    patch:
+      tags:
+        - Tasks
+      summary: Mark task as completed
+      description: Change task status to completed
+      operationId: completeTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/taskId"
+      responses:
+        "200":
+          description: Task marked as completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /production_orders/{production_order_id}/tasks/{id}/reopen:
+    patch:
+      tags:
+        - Tasks
+      summary: Reopen a completed task
+      description: Change task status back to pending
+      operationId: reopenTask
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/taskId"
+      responses:
+        "200":
+          description: Task reopened
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ==========================================
+  # USERS
+  # ==========================================
+  /users:
+    get:
+      tags:
+        - Users
+      summary: List all users
+      description: Returns paginated list of users (admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/User"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      description: Create a new user (admin only)
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreate"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user details
+      description: Returns detailed information about a specific user
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/UserDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags:
+        - Users
+      summary: Update user
+      description: Update an existing user
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+    delete:
+      tags:
+        - Users
+      summary: Delete user
+      description: Delete a user (admin only)
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/userId"
+      responses:
+        "200":
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # ==========================================
+  # ORDER ASSIGNMENTS
+  # ==========================================
+  /order_assignments:
+    post:
+      tags:
+        - Order Assignments
+      summary: Assign user to production order
+      description: Create a new assignment between user and production order
+      operationId: createOrderAssignment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderAssignmentCreate"
+      responses:
+        "201":
+          description: Assignment created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/OrderAssignment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /order_assignments/{id}:
+    delete:
+      tags:
+        - Order Assignments
+      summary: Remove assignment
+      description: Remove user assignment from production order
+      operationId: deleteOrderAssignment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Assignment removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+# ==========================================
+# COMPONENTS
+# ==========================================
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login endpoint
+
+  parameters:
+    productionOrderId:
+      name: production_order_id
+      in: path
+      required: true
+      description: Production order ID
+      schema:
+        type: integer
+
+    taskId:
+      name: id
+      in: path
+      required: true
+      description: Task ID
+      schema:
+        type: integer
+
+    userId:
+      name: id
+      in: path
+      required: true
+      description: User ID
+      schema:
+        type: integer
+
+  schemas:
+    # ==========================================
+    # USER SCHEMAS
+    # ==========================================
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: carlos.rodriguez@empresa.com
+        name:
+          type: string
+          example: Carlos Rodríguez
+        role:
+          type: string
+          enum: [admin, production_manager, operator]
+          example: admin
+        created_at:
+          type: string
+          format: date-time
+
+    UserDetail:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            assigned_orders_count:
+              type: integer
+              example: 15
+            completed_orders_count:
+              type: integer
+              example: 8
+
+    UserCreate:
+      type: object
+      required:
+        - email
+        - name
+        - password
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, production_manager, operator]
+
+    UserUpdate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          type: string
+          enum: [admin, production_manager, operator]
+
+    # ==========================================
+    # PRODUCTION ORDER SCHEMAS
+    # ==========================================
+    ProductionOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        order_number:
+          type: integer
+          example: 1001
+        type:
+          type: string
+          enum: [NormalOrder, UrgentOrder]
+          example: NormalOrder
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+          example: pending
+        start_date:
+          type: string
+          format: date
+          example: "2025-11-01"
+        expected_end_date:
+          type: string
+          format: date
+          example: "2025-11-15"
+        deadline:
+          type: string
+          format: date
+          example: "2025-11-10"
+          description: Only for UrgentOrder type
+        is_urgent:
+          type: boolean
+          example: false
+        tasks_count:
+          type: integer
+          example: 5
+        completed_tasks_count:
+          type: integer
+          example: 3
+        creator:
+          $ref: "#/components/schemas/User"
+        assigned_users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ProductionOrderCreate:
+      type: object
+      required:
+        - production_order
+      properties:
+        production_order:
+          type: object
+          required:
+            - start_date
+            - expected_end_date
+            - type
+          properties:
+            type:
+              type: string
+              enum: [NormalOrder, UrgentOrder]
+              example: NormalOrder
+            start_date:
+              type: string
+              format: date
+            expected_end_date:
+              type: string
+              format: date
+            deadline:
+              type: string
+              format: date
+              description: Required for UrgentOrder type
+            user_ids:
+              type: array
+              items:
+                type: integer
+              description: Array of user IDs to assign to this order
+            tasks_attributes:
+              type: array
+              items:
+                type: object
+                required:
+                  - title
+                  - description
+                properties:
+                  title:
+                    type: string
+                  description:
+                    type: string
+
+    ProductionOrderUpdate:
+      type: object
+      properties:
+        production_order:
+          type: object
+          properties:
+            start_date:
+              type: string
+              format: date
+            expected_end_date:
+              type: string
+              format: date
+            deadline:
+              type: string
+              format: date
+            status:
+              type: string
+              enum: [pending, completed, cancelled]
+            user_ids:
+              type: array
+              items:
+                type: integer
+
+    # ==========================================
+    # TASK SCHEMAS
+    # ==========================================
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        title:
+          type: string
+          example: Preparar materiales
+        description:
+          type: string
+          example: Verificar disponibilidad de materias primas
+        status:
+          type: string
+          enum: [pending, completed]
+          example: pending
+        production_order_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TaskCreate:
+      type: object
+      required:
+        - task
+      properties:
+        task:
+          type: object
+          required:
+            - title
+            - description
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+
+    TaskUpdate:
+      type: object
+      properties:
+        task:
+          type: object
+          properties:
+            title:
+              type: string
+            description:
+              type: string
+            status:
+              type: string
+              enum: [pending, completed]
+
+    # ==========================================
+    # ORDER ASSIGNMENT SCHEMAS
+    # ==========================================
+    OrderAssignment:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        production_order_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    OrderAssignmentCreate:
+      type: object
+      required:
+        - order_assignment
+      properties:
+        order_assignment:
+          type: object
+          required:
+            - user_id
+            - production_order_id
+          properties:
+            user_id:
+              type: integer
+            production_order_id:
+              type: integer
+
+    # ==========================================
+    # COMMON SCHEMAS
+    # ==========================================
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+          example: Operation completed successfully
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+
+    Pagination:
+      type: object
+      properties:
+        current_page:
+          type: integer
+          example: 1
+        per_page:
+          type: integer
+          example: 20
+        total_pages:
+          type: integer
+          example: 5
+        total_count:
+          type: integer
+          example: 95
+
+  responses:
+    Unauthorized:
+      description: Authentication required or token invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: unauthorized
+              message: Token inválido o expirado
+
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: forbidden
+              message: No tienes permisos para realizar esta acción
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: not_found
+              message: Recurso no encontrado
+
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            success: false
+            error:
+              code: validation_error
+              message: Errores de validación
+              details:
+                email: ["no puede estar en blanco"]
+                password: ["es demasiado corto (mínimo 8 caracteres)"]
+      ErrorResponse:
+        type: object
+        properties:
+          success:
+            type: boolean
+            example: false
+          error:
+            type: object
+            properties:
+              code:
+                type: string
+                example: validation_error
+              message:
+                type: string
+                example: Errores de validación
+              details:
+                type: object
+                additionalProperties: true
+      Pagination:
+        type: object
+        properties:
+          current_page:
+            type: integer
+            example: 1
+          per_page:
+            type: integer
+            example: 20
+          total_pages:
+            type: integer
+            example: 5
+          total_count:
+            type: integer
+            example: 95
+
+      responses:
+        Unauthorized:
+          description: Authentication required or token invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: unauthorized
+                  message: Token inválido o expirado
+
+        Forbidden:
+          description: Insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: forbidden
+                  message: No tienes permisos para realizar esta acción
+
+        NotFound:
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: not_found
+                  message: Recurso no encontrado
+
+        ValidationError:
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error:
+                  code: validation_error
+                  message: Errores de validación
+                  details:
+                    email: ["no puede estar en blanco"]
+                    password: ["es demasiado corto (mínimo 8 caracteres)"]

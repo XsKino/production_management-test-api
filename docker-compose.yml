@@ -1,0 +1,138 @@
+# Docker Compose para Kiuey Test API
+# Incluye todos los servicios necesarios: MySQL, Redis, Rails, Sidekiq
+
+services:
+  # ==========================================
+  # Base de Datos MySQL
+  # ==========================================
+  db:
+    image: mysql:8.0
+    container_name: kiuey_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: kiuey_test_api_production
+    ports:
+      - "3307:3306"  # Puerto local 3307 para evitar conflicto con MySQL local
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-ppassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kiuey_network
+
+  # ==========================================
+  # Redis (Cache y Sidekiq)
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: kiuey_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kiuey_network
+
+  # ==========================================
+  # Rails API Server
+  # ==========================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kiuey_web
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql2://root:password@db:3306/kiuey_test_api_production
+      REDIS_URL: redis://redis:6379/1
+      RAILS_ENV: production
+      RAILS_LOG_LEVEL: info
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-here-generate-with-rails-secret}
+      JWT_EXPIRATION_HOURS: 24
+      FORCE_SSL: "false"
+      ALLOWED_ORIGINS: "*"
+      RAILS_MAX_THREADS: 5
+      SIDEKIQ_CONCURRENCY: 5
+    ports:
+      - "3001:3000"  # Port local 3001 para evitar conflicto
+    volumes:
+      # Montar código en desarrollo (comentar para producción)
+      # - .:/rails
+      # Solo storage y logs persistentes
+      - rails_storage:/rails/storage
+      - rails_logs:/rails/log
+    networks:
+      - kiuey_network
+    command: >
+      bash -c "
+        echo '🚀 Starting Rails server...'
+        bundle exec rails db:create db:migrate &&
+        bundle exec rails server -b 0.0.0.0
+      "
+
+  # ==========================================
+  # Sidekiq (Background Jobs)
+  # ==========================================
+  sidekiq:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kiuey_sidekiq
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: mysql2://root:password@db:3306/kiuey_test_api_production
+      REDIS_URL: redis://redis:6379/1
+      RAILS_ENV: production
+      RAILS_LOG_LEVEL: info
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-your-secret-key-here-generate-with-rails-secret}
+      SIDEKIQ_CONCURRENCY: 5
+    volumes:
+      # Montar código en desarrollo (comentar para producción)
+      # - .:/rails
+      - rails_logs:/rails/log
+    networks:
+      - kiuey_network
+    command: bundle exec sidekiq
+
+# ==========================================
+# Volúmenes Persistentes
+# ==========================================
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local
+  rails_storage:
+    driver: local
+  rails_logs:
+    driver: local
+
+# ==========================================
+# Red Interna
+# ==========================================
+networks:
+  kiuey_network:
+    driver: bridge
