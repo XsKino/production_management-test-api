@@ -6,6 +6,7 @@ gem "puma", ">= 5.0"
 
 # Auth
 gem "bcrypt", "~> 3.1.7"
+gem "jwt"
 gem "pundit"
 
 # Filtering and Pagination

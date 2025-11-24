@@ -3,8 +3,8 @@ require 'rails_helper'
 RSpec.describe 'Production Orders API', type: :request do
   let(:admin) { create(:user, role: :admin) }
   let(:manager) { create(:user, role: :production_manager) }
-  
-  let(:auth_headers) { { 'Authorization' => "Bearer #{admin.id}" } }
+
+  let(:auth_headers) { auth_headers_for(admin) }
   let(:json_headers) { { 'Content-Type' => 'application/json' } }
   let(:headers) { auth_headers.merge(json_headers) }
 

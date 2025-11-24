@@ -1,0 +1,1141 @@
+# API Documentation - Production Orders Management
+
+Base URL: `http://localhost:3000/api/v1`
+
+## Authentication
+
+All endpoints (except login) require JWT authentication via the `Authorization` header:
+
+```
+Authorization: Bearer <jwt_token>
+```
+
+### POST /auth/login
+
+Authenticate user and receive JWT token.
+
+**Request:**
+```json
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9...",
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "admin"
+    }
+  },
+  "message": "Login successful"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "success": false,
+  "message": "Invalid email or password",
+  "code": "INVALID_CREDENTIALS"
+}
+```
+
+### POST /auth/logout
+
+Logout current user (client should discard token).
+
+**Request:**
+```json
+POST /api/v1/auth/logout
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+### POST /auth/refresh
+
+Refresh JWT token to extend session.
+
+**Request:**
+```json
+POST /api/v1/auth/refresh
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9...",
+    "user": {
+      "id": 1,
+      "email": "user@example.com",
+      "name": "John Doe",
+      "role": "admin"
+    }
+  },
+  "message": "Token refreshed successfully"
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "success": false,
+  "message": "Invalid token",
+  "code": "INVALID_TOKEN"
+}
+```
+
+---
+
+## Production Orders
+
+### GET /production_orders
+
+List all production orders with pagination and filtering.
+
+**Request:**
+```
+GET /api/v1/production_orders?page=1&per_page=20
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `page` (integer, optional): Page number (default: 1)
+- `per_page` (integer, optional): Items per page (default: 20, max: 100)
+- `q[status_eq]` (string, optional): Filter by status (`pending`, `in_progress`, `completed`, `cancelled`)
+- `q[type_eq]` (string, optional): Filter by type (`NormalOrder`, `UrgentOrder`)
+- `q[start_date_gteq]` (date, optional): Filter by start date (greater than or equal)
+- `q[start_date_lteq]` (date, optional): Filter by start date (less than or equal)
+- `q[expected_end_date_gteq]` (date, optional): Filter by expected end date (greater than or equal)
+- `q[expected_end_date_lteq]` (date, optional): Filter by expected end date (less than or equal)
+- `q[creator_id_eq]` (integer, optional): Filter by creator ID
+- `q[order_number_eq]` (string, optional): Filter by order number
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "type": "NormalOrder",
+      "order_number": "NO-2024-001",
+      "status": "pending",
+      "start_date": "2024-01-15",
+      "expected_end_date": "2024-01-30",
+      "deadline": null,
+      "created_at": "2024-01-10T10:00:00.000Z",
+      "updated_at": "2024-01-10T10:00:00.000Z",
+      "creator": {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "admin"
+      },
+      "assigned_users": [
+        {
+          "id": 2,
+          "name": "Jane Smith",
+          "email": "jane@example.com",
+          "role": "operator"
+        }
+      ],
+      "tasks_count": 5,
+      "completed_tasks_count": 2
+    },
+    {
+      "id": 2,
+      "type": "UrgentOrder",
+      "order_number": "UO-2024-001",
+      "status": "in_progress",
+      "start_date": "2024-01-12",
+      "expected_end_date": "2024-01-20",
+      "deadline": "2024-01-18",
+      "created_at": "2024-01-11T14:30:00.000Z",
+      "updated_at": "2024-01-12T09:00:00.000Z",
+      "creator": {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "admin"
+      },
+      "assigned_users": [],
+      "tasks_count": 3,
+      "completed_tasks_count": 1
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 5,
+      "total_count": 95,
+      "per_page": 20,
+      "has_next_page": true,
+      "has_prev_page": false
+    }
+  }
+}
+```
+
+### GET /production_orders/:id
+
+Get details of a specific production order.
+
+**Request:**
+```
+GET /api/v1/production_orders/1
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "type": "NormalOrder",
+    "order_number": "NO-2024-001",
+    "status": "pending",
+    "start_date": "2024-01-15",
+    "expected_end_date": "2024-01-30",
+    "deadline": null,
+    "created_at": "2024-01-10T10:00:00.000Z",
+    "updated_at": "2024-01-10T10:00:00.000Z",
+    "creator": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "admin"
+    },
+    "assigned_users": [
+      {
+        "id": 2,
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "role": "operator"
+      }
+    ],
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Prepare materials",
+        "description": "Gather all required materials for production",
+        "status": "completed",
+        "assigned_to_id": 2,
+        "assigned_to_name": "Jane Smith",
+        "due_date": "2024-01-16",
+        "completed_at": "2024-01-16T15:30:00.000Z"
+      },
+      {
+        "id": 2,
+        "title": "Assembly phase 1",
+        "description": "Complete first assembly phase",
+        "status": "pending",
+        "assigned_to_id": 2,
+        "assigned_to_name": "Jane Smith",
+        "due_date": "2024-01-20",
+        "completed_at": null
+      }
+    ]
+  }
+}
+```
+
+**Error Response (404 Not Found):**
+```json
+{
+  "success": false,
+  "message": "Production order not found",
+  "code": "NOT_FOUND"
+}
+```
+
+### POST /production_orders
+
+Create a new production order (Normal or Urgent).
+
+**Request for Normal Order:**
+```json
+POST /api/v1/production_orders
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "production_order": {
+    "type": "NormalOrder",
+    "start_date": "2024-02-01",
+    "expected_end_date": "2024-02-15",
+    "assigned_user_ids": [2, 3],
+    "tasks_attributes": [
+      {
+        "title": "Task 1",
+        "description": "First task description",
+        "assigned_to_id": 2,
+        "due_date": "2024-02-05"
+      },
+      {
+        "title": "Task 2",
+        "description": "Second task description",
+        "assigned_to_id": 3,
+        "due_date": "2024-02-10"
+      }
+    ]
+  }
+}
+```
+
+**Request for Urgent Order:**
+```json
+POST /api/v1/production_orders
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "production_order": {
+    "type": "UrgentOrder",
+    "start_date": "2024-02-01",
+    "expected_end_date": "2024-02-08",
+    "deadline": "2024-02-07",
+    "assigned_user_ids": [2],
+    "tasks_attributes": [
+      {
+        "title": "Urgent task",
+        "description": "Critical task",
+        "assigned_to_id": 2,
+        "due_date": "2024-02-05"
+      }
+    ]
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 10,
+    "type": "UrgentOrder",
+    "order_number": "UO-2024-002",
+    "status": "pending",
+    "start_date": "2024-02-01",
+    "expected_end_date": "2024-02-08",
+    "deadline": "2024-02-07",
+    "created_at": "2024-01-25T10:00:00.000Z",
+    "updated_at": "2024-01-25T10:00:00.000Z",
+    "creator": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "admin"
+    },
+    "assigned_users": [
+      {
+        "id": 2,
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "role": "operator"
+      }
+    ],
+    "tasks": [
+      {
+        "id": 20,
+        "title": "Urgent task",
+        "description": "Critical task",
+        "status": "pending",
+        "assigned_to_id": 2,
+        "assigned_to_name": "Jane Smith",
+        "due_date": "2024-02-05",
+        "completed_at": null
+      }
+    ]
+  },
+  "message": "Production order created successfully"
+}
+```
+
+**Error Response (422 Unprocessable Entity):**
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": {
+    "start_date": ["can't be blank"],
+    "expected_end_date": ["can't be blank"]
+  },
+  "code": "VALIDATION_ERROR"
+}
+```
+
+### PUT/PATCH /production_orders/:id
+
+Update an existing production order.
+
+**Request:**
+```json
+PATCH /api/v1/production_orders/1
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "production_order": {
+    "status": "in_progress",
+    "expected_end_date": "2024-02-20",
+    "assigned_user_ids": [2, 3, 4]
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "type": "NormalOrder",
+    "order_number": "NO-2024-001",
+    "status": "in_progress",
+    "start_date": "2024-01-15",
+    "expected_end_date": "2024-02-20",
+    "deadline": null,
+    "created_at": "2024-01-10T10:00:00.000Z",
+    "updated_at": "2024-01-25T11:00:00.000Z",
+    "creator": {
+      "id": 1,
+      "name": "John Doe",
+      "email": "john@example.com",
+      "role": "admin"
+    },
+    "assigned_users": [
+      {
+        "id": 2,
+        "name": "Jane Smith",
+        "email": "jane@example.com",
+        "role": "operator"
+      },
+      {
+        "id": 3,
+        "name": "Bob Johnson",
+        "email": "bob@example.com",
+        "role": "operator"
+      },
+      {
+        "id": 4,
+        "name": "Alice Williams",
+        "email": "alice@example.com",
+        "role": "production_manager"
+      }
+    ],
+    "tasks": []
+  },
+  "message": "Production order updated successfully"
+}
+```
+
+### DELETE /production_orders/:id
+
+Delete a production order.
+
+**Request:**
+```
+DELETE /api/v1/production_orders/1
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Production order deleted successfully"
+}
+```
+
+### GET /production_orders/:id/tasks_summary
+
+Get summary of tasks for a specific production order.
+
+**Request:**
+```
+GET /api/v1/production_orders/1/tasks_summary
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "order_id": 1,
+    "order_number": "NO-2024-001",
+    "total_tasks": 5,
+    "completed_tasks": 2,
+    "pending_tasks": 2,
+    "in_progress_tasks": 1,
+    "completion_percentage": 40.0,
+    "overdue_tasks": 1,
+    "tasks_by_user": [
+      {
+        "user_id": 2,
+        "user_name": "Jane Smith",
+        "total_tasks": 3,
+        "completed_tasks": 1
+      },
+      {
+        "user_id": 3,
+        "user_name": "Bob Johnson",
+        "total_tasks": 2,
+        "completed_tasks": 1
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Report Endpoints
+
+### GET /production_orders/urgent_orders_report
+
+Get report of all urgent orders with their status.
+
+**Request:**
+```
+GET /api/v1/production_orders/urgent_orders_report
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "total_urgent_orders": 15,
+    "by_status": {
+      "pending": 5,
+      "in_progress": 7,
+      "completed": 2,
+      "cancelled": 1
+    },
+    "orders": [
+      {
+        "id": 2,
+        "order_number": "UO-2024-001",
+        "status": "in_progress",
+        "deadline": "2024-01-18",
+        "days_until_deadline": 3,
+        "is_overdue": false,
+        "completion_percentage": 33.33
+      }
+    ]
+  }
+}
+```
+
+### GET /production_orders/monthly_statistics
+
+Get monthly statistics for production orders.
+
+**Request:**
+```
+GET /api/v1/production_orders/monthly_statistics?year=2024&month=1
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `year` (integer, optional): Year (default: current year)
+- `month` (integer, optional): Month (1-12, default: current month)
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "period": "January 2024",
+    "total_orders": 25,
+    "normal_orders": 18,
+    "urgent_orders": 7,
+    "by_status": {
+      "pending": 8,
+      "in_progress": 10,
+      "completed": 6,
+      "cancelled": 1
+    },
+    "completion_rate": 24.0,
+    "average_completion_time_days": 12.5,
+    "orders_created": 25,
+    "orders_completed": 6,
+    "total_tasks": 125,
+    "completed_tasks": 45,
+    "task_completion_rate": 36.0
+  }
+}
+```
+
+### GET /production_orders/urgent_with_expired_tasks
+
+Get urgent orders that have expired tasks.
+
+**Request:**
+```
+GET /api/v1/production_orders/urgent_with_expired_tasks
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "total_orders_with_expired_tasks": 3,
+    "orders": [
+      {
+        "id": 2,
+        "order_number": "UO-2024-001",
+        "status": "in_progress",
+        "deadline": "2024-01-18",
+        "days_until_deadline": -2,
+        "is_overdue": true,
+        "expired_tasks": [
+          {
+            "id": 5,
+            "title": "Critical assembly",
+            "due_date": "2024-01-15",
+            "days_overdue": 10,
+            "assigned_to": "Jane Smith"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+---
+
+## Tasks
+
+Tasks are managed as nested resources under production orders.
+
+### POST /production_orders/:production_order_id/tasks
+
+Create a new task for a production order.
+
+**Request:**
+```json
+POST /api/v1/production_orders/1/tasks
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "task": {
+    "title": "Quality inspection",
+    "description": "Perform quality check on all units",
+    "assigned_to_id": 2,
+    "due_date": "2024-02-10",
+    "status": "pending"
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "title": "Quality inspection",
+    "description": "Perform quality check on all units",
+    "status": "pending",
+    "assigned_to_id": 2,
+    "assigned_to_name": "Jane Smith",
+    "due_date": "2024-02-10",
+    "completed_at": null,
+    "production_order_id": 1,
+    "created_at": "2024-01-25T12:00:00.000Z",
+    "updated_at": "2024-01-25T12:00:00.000Z"
+  },
+  "message": "Task created successfully"
+}
+```
+
+### PUT/PATCH /production_orders/:production_order_id/tasks/:id
+
+Update an existing task.
+
+**Request:**
+```json
+PATCH /api/v1/production_orders/1/tasks/25
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "task": {
+    "status": "in_progress",
+    "description": "Perform detailed quality check on all units"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "title": "Quality inspection",
+    "description": "Perform detailed quality check on all units",
+    "status": "in_progress",
+    "assigned_to_id": 2,
+    "assigned_to_name": "Jane Smith",
+    "due_date": "2024-02-10",
+    "completed_at": null,
+    "production_order_id": 1,
+    "created_at": "2024-01-25T12:00:00.000Z",
+    "updated_at": "2024-01-25T12:30:00.000Z"
+  },
+  "message": "Task updated successfully"
+}
+```
+
+### DELETE /production_orders/:production_order_id/tasks/:id
+
+Delete a task.
+
+**Request:**
+```
+DELETE /api/v1/production_orders/1/tasks/25
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Task deleted successfully"
+}
+```
+
+### PATCH /production_orders/:production_order_id/tasks/:id/complete
+
+Mark a task as completed.
+
+**Request:**
+```
+PATCH /api/v1/production_orders/1/tasks/25/complete
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "title": "Quality inspection",
+    "description": "Perform quality check on all units",
+    "status": "completed",
+    "assigned_to_id": 2,
+    "assigned_to_name": "Jane Smith",
+    "due_date": "2024-02-10",
+    "completed_at": "2024-01-25T14:30:00.000Z",
+    "production_order_id": 1,
+    "created_at": "2024-01-25T12:00:00.000Z",
+    "updated_at": "2024-01-25T14:30:00.000Z"
+  },
+  "message": "Task completed successfully"
+}
+```
+
+### PATCH /production_orders/:production_order_id/tasks/:id/reopen
+
+Reopen a completed task.
+
+**Request:**
+```
+PATCH /api/v1/production_orders/1/tasks/25/reopen
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 25,
+    "title": "Quality inspection",
+    "description": "Perform quality check on all units",
+    "status": "pending",
+    "assigned_to_id": 2,
+    "assigned_to_name": "Jane Smith",
+    "due_date": "2024-02-10",
+    "completed_at": null,
+    "production_order_id": 1,
+    "created_at": "2024-01-25T12:00:00.000Z",
+    "updated_at": "2024-01-25T15:00:00.000Z"
+  },
+  "message": "Task reopened successfully"
+}
+```
+
+---
+
+## Order Assignments
+
+Manage user assignments to production orders.
+
+### POST /order_assignments
+
+Assign a user to a production order.
+
+**Request:**
+```json
+POST /api/v1/order_assignments
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "order_assignment": {
+    "production_order_id": 1,
+    "user_id": 3
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 15,
+    "production_order_id": 1,
+    "user_id": 3,
+    "assigned_at": "2024-01-25T16:00:00.000Z"
+  },
+  "message": "User assigned to order successfully"
+}
+```
+
+**Error Response (422 Unprocessable Entity):**
+```json
+{
+  "success": false,
+  "message": "User has already been assigned to this order",
+  "code": "VALIDATION_ERROR"
+}
+```
+
+### DELETE /order_assignments/:id
+
+Remove a user assignment from a production order.
+
+**Request:**
+```
+DELETE /api/v1/order_assignments/15
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "User unassigned from order successfully"
+}
+```
+
+---
+
+## Users
+
+Manage system users.
+
+### GET /users
+
+List all users with pagination.
+
+**Request:**
+```
+GET /api/v1/users?page=1&per_page=20
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `page` (integer, optional): Page number (default: 1)
+- `per_page` (integer, optional): Items per page (default: 20, max: 100)
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "email": "john@example.com",
+      "name": "John Doe",
+      "role": "admin",
+      "created_at": "2024-01-01T10:00:00.000Z",
+      "updated_at": "2024-01-01T10:00:00.000Z"
+    },
+    {
+      "id": 2,
+      "email": "jane@example.com",
+      "name": "Jane Smith",
+      "role": "operator",
+      "created_at": "2024-01-02T11:00:00.000Z",
+      "updated_at": "2024-01-02T11:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 3,
+      "total_count": 45,
+      "per_page": 20,
+      "has_next_page": true,
+      "has_prev_page": false
+    }
+  }
+}
+```
+
+### GET /users/:id
+
+Get details of a specific user.
+
+**Request:**
+```
+GET /api/v1/users/1
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "email": "john@example.com",
+    "name": "John Doe",
+    "role": "admin",
+    "created_at": "2024-01-01T10:00:00.000Z",
+    "updated_at": "2024-01-01T10:00:00.000Z"
+  }
+}
+```
+
+### POST /users
+
+Create a new user.
+
+**Request:**
+```json
+POST /api/v1/users
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "user": {
+    "email": "newuser@example.com",
+    "name": "New User",
+    "password": "securepassword123",
+    "role": "operator"
+  }
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 50,
+    "email": "newuser@example.com",
+    "name": "New User",
+    "role": "operator",
+    "created_at": "2024-01-25T17:00:00.000Z",
+    "updated_at": "2024-01-25T17:00:00.000Z"
+  },
+  "message": "User created successfully"
+}
+```
+
+### PUT/PATCH /users/:id
+
+Update an existing user.
+
+**Request:**
+```json
+PATCH /api/v1/users/50
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "user": {
+    "name": "Updated Name",
+    "role": "production_manager"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 50,
+    "email": "newuser@example.com",
+    "name": "Updated Name",
+    "role": "production_manager",
+    "created_at": "2024-01-25T17:00:00.000Z",
+    "updated_at": "2024-01-25T17:30:00.000Z"
+  },
+  "message": "User updated successfully"
+}
+```
+
+### DELETE /users/:id
+
+Delete a user.
+
+**Request:**
+```
+DELETE /api/v1/users/50
+Authorization: Bearer <token>
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "User deleted successfully"
+}
+```
+
+---
+
+## Health Check
+
+### GET /health
+
+Check API health status.
+
+**Request:**
+```
+GET /api/v1/health
+```
+
+**Response (200 OK):**
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-01-25T18:00:00.000Z",
+  "version": "1.0.0"
+}
+```
+
+---
+
+## User Roles
+
+The system supports the following user roles:
+
+- **admin**: Full system access, can manage all resources
+- **production_manager**: Can manage production orders and tasks, view reports
+- **operator**: Can view assigned orders and update task status
+
+---
+
+## Error Codes
+
+Common error codes returned by the API:
+
+- `UNAUTHORIZED`: Missing or invalid authentication token
+- `FORBIDDEN`: User doesn't have permission for this action
+- `NOT_FOUND`: Requested resource not found
+- `VALIDATION_ERROR`: Request data failed validation
+- `INVALID_CREDENTIALS`: Invalid email or password (login)
+- `INVALID_TOKEN`: Token is invalid or expired (refresh)
+- `USER_NOT_FOUND`: User associated with token not found
+
+---
+
+## Common Error Responses
+
+**401 Unauthorized:**
+```json
+{
+  "success": false,
+  "message": "Unauthorized",
+  "code": "UNAUTHORIZED"
+}
+```
+
+**403 Forbidden:**
+```json
+{
+  "success": false,
+  "message": "You are not authorized to perform this action",
+  "code": "FORBIDDEN"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "success": false,
+  "message": "Resource not found",
+  "code": "NOT_FOUND"
+}
+```
+
+**422 Validation Error:**
+```json
+{
+  "success": false,
+  "message": "Validation failed",
+  "errors": {
+    "field_name": ["error message 1", "error message 2"]
+  },
+  "code": "VALIDATION_ERROR"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "success": false,
+  "message": "Internal server error",
+  "code": "INTERNAL_ERROR"
+}
+```
+
+---
+
+## Notes
+
+- All timestamps are in ISO 8601 format (UTC)
+- Dates are in YYYY-MM-DD format
+- JWT tokens expire after 24 hours
+- All requests must include `Content-Type: application/json` header for POST/PUT/PATCH requests
+- Order numbers are automatically generated with format: `NO-YYYY-XXX` (NormalOrder) or `UO-YYYY-XXX` (UrgentOrder)
+- Pagination defaults to 20 items per page, maximum 100 items per page

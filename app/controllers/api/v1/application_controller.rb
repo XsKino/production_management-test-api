@@ -13,16 +13,19 @@ class Api::V1::ApplicationController < ActionController::API
   protected
 
   def authenticate_request
-    # TODO: Implement actual authentication
-    # we'll use a simple header-based auth for testing for now
     token = request.headers['Authorization']&.split(' ')&.last
-    
+
     if token.present?
-      # Simple token validation - replace with actual JWT or session validation
-      @current_user = User.find_by(id: token) if token.match?(/^\d+$/)
+      decoded = JsonWebToken.decode(token)
+
+      if decoded
+        @current_user = User.find_by(id: decoded[:user_id])
+      end
     end
-    
-    render json: { error: 'Unauthorized' }, status: :unauthorized unless @current_user
+
+    unless @current_user
+      render_error('Unauthorized', :unauthorized, nil, 'UNAUTHORIZED')
+    end
   end
 
   def current_user

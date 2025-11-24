@@ -10,9 +10,10 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
-      # Authentication routes (will be needed later)
-      # post 'auth/login', to: 'authentication#login'
-      # post 'auth/logout', to: 'authentication#logout'
+      # Authentication routes
+      post 'auth/login', to: 'authentication#login'
+      post 'auth/logout', to: 'authentication#logout'
+      post 'auth/refresh', to: 'authentication#refresh'
 
       # Production Orders routes with nested tasks
       resources :production_orders do

@@ -6,8 +6,9 @@ RSpec.describe Api::V1::ProductionOrdersController, type: :controller do
   let(:operator) { create(:user, role: :operator) }
   
   before do
-    # Simple authentication for testing
-    request.headers['Authorization'] = "Bearer #{admin.id}"
+    # JWT authentication for testing
+    token = generate_token(admin)
+    request.headers['Authorization'] = "Bearer #{token}"
   end
 
   describe 'GET #index' do
