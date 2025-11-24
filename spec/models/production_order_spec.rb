@@ -14,6 +14,26 @@ RSpec.describe ProductionOrder, type: :model do
     it { should validate_presence_of(:start_date) }
     it { should validate_presence_of(:expected_end_date) }
     it { should validate_presence_of(:status) }
+
+    context 'date validations' do
+      let(:creator) { create(:user) }
+
+      it 'is valid when expected_end_date equals start_date' do
+        order = build(:normal_order, creator: creator, start_date: Date.current, expected_end_date: Date.current)
+        expect(order).to be_valid
+      end
+
+      it 'is valid when expected_end_date is after start_date' do
+        order = build(:normal_order, creator: creator, start_date: Date.current, expected_end_date: 1.week.from_now)
+        expect(order).to be_valid
+      end
+
+      it 'is invalid when expected_end_date is before start_date' do
+        order = build(:normal_order, creator: creator, start_date: Date.current, expected_end_date: 1.week.ago)
+        expect(order).not_to be_valid
+        expect(order.errors[:expected_end_date]).to include('must be greater than or equal to start date')
+      end
+    end
   end
 
   describe 'enums' do

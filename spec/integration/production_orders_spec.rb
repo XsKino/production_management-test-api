@@ -37,17 +37,17 @@ RSpec.describe 'Production Orders API', type: :request do
 
       it 'filters orders by date range' do
         future_date = 1.month.from_now
-        normal_order.update!(start_date: future_date)
-        
+        normal_order.update!(start_date: future_date, expected_end_date: future_date + 1.week)
+
         get '/api/v1/production_orders',
             headers: headers,
-            params: { 
-              q: { 
+            params: {
+              q: {
                 start_date_gteq: future_date.beginning_of_month,
                 start_date_lteq: future_date.end_of_month
-              } 
+              }
             }
-        
+
         expect(response).to have_http_status(:ok)
         expect(json_response['data'].length).to eq(1)
       end

@@ -29,6 +29,26 @@ RSpec.describe UrgentOrder, type: :model do
       order = build(:urgent_order, deadline: 1.week.from_now)
       expect(order).to be_valid
     end
+
+    context 'deadline date validations' do
+      let(:creator) { create(:user) }
+
+      it 'is valid when deadline equals start_date' do
+        order = build(:urgent_order, creator: creator, start_date: Date.current, deadline: Date.current)
+        expect(order).to be_valid
+      end
+
+      it 'is valid when deadline is after start_date' do
+        order = build(:urgent_order, creator: creator, start_date: Date.current, deadline: 1.week.from_now)
+        expect(order).to be_valid
+      end
+
+      it 'is invalid when deadline is before start_date' do
+        order = build(:urgent_order, creator: creator, start_date: Date.current, deadline: 1.week.ago)
+        expect(order).not_to be_valid
+        expect(order.errors[:deadline]).to include('must be greater than or equal to start date')
+      end
+    end
   end
 
   describe 'order numbering' do

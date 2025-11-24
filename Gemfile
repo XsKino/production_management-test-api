@@ -19,6 +19,10 @@ gem 'rack-cors'
 # Background Jobs
 gem "sidekiq"
 gem "redis"
+gem "whenever", require: false
+
+# Email
+gem "sendgrid-ruby"
 
 # Windows timezone
 gem "tzinfo-data", platforms: %i[ windows jruby ]

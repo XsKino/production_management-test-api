@@ -8,11 +8,20 @@ class Api::V1::ApplicationController < ActionController::API
   ITEMS_PER_PAGE = 20
   MAX_ITEMS_PER_PAGE = 100
 
-  before_action :authenticate_request
+  before_action :authenticate_request, except: [:health]
   before_action :set_default_response_format
 
   # Pundit authorization error handling
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
+
+  # Health check endpoint (public)
+  def health
+    render json: {
+      status: 'ok',
+      timestamp: Time.current,
+      version: '1.0.0'
+    }
+  end
 
   protected
 
@@ -88,15 +97,6 @@ class Api::V1::ApplicationController < ActionController::API
         has_next_page: collection.next_page.present?,
         has_prev_page: collection.prev_page.present?
       }
-    }
-  end
-
-  # Health check endpoint
-  def health
-    render json: {
-      status: 'ok',
-      timestamp: Time.current,
-      version: '1.0.0'
     }
   end
 end

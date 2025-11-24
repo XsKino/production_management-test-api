@@ -14,7 +14,9 @@ class ProductionOrder < ApplicationRecord
   validates :expected_end_date, presence: true
   validates :status, presence: true
   validates :order_number, presence: true, uniqueness: { scope: :type }
-  
+
+  validate :expected_end_date_after_start_date
+
   before_validation :set_order_number, on: :create
   
   # Helper: User has access to this order?
@@ -34,16 +36,25 @@ class ProductionOrder < ApplicationRecord
   end
 
   private
-  
+
+  # Validate that expected_end_date is not before start_date
+  def expected_end_date_after_start_date
+    return unless expected_end_date.present? && start_date.present?
+
+    if expected_end_date < start_date
+      errors.add(:expected_end_date, "must be greater than or equal to start date")
+    end
+  end
+
   # Autoincremental index based on 'type'
   def set_order_number
     return if order_number.present?
-    
+
     last_order = self.class.base_class
                           .where(type: self.class.name)
                           .order(order_number: :desc)
                           .first
-    
+
     self.order_number = (last_order&.order_number || 0) + 1
   end
 end

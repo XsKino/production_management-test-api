@@ -5,6 +5,7 @@ Basado en requirements.pdf y análisis del código actual.
 ## ✅ Completado
 
 ### Modelos y Base de Datos
+
 - [x] Modelo User con roles (operator, production_manager, admin)
 - [x] Autenticación con bcrypt (has_secure_password)
 - [x] Validación de email único
@@ -19,6 +20,7 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] Índices únicos para (type, order_number) y (user_id, production_order_id)
 
 ### API Endpoints - Production Orders
+
 - [x] GET /api/v1/production_orders - Listar órdenes con paginación
 - [x] GET /api/v1/production_orders/:id - Ver detalle de orden con tareas
 - [x] POST /api/v1/production_orders - Crear orden con tareas anidadas
@@ -30,6 +32,7 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] GET /api/v1/production_orders/urgent_with_expired_tasks - Órdenes urgentes con tareas vencidas
 
 ### API Endpoints - Tasks
+
 - [x] POST /api/v1/production_orders/:production_order_id/tasks - Crear tarea
 - [x] PATCH /api/v1/production_orders/:production_order_id/tasks/:id - Actualizar tarea
 - [x] DELETE /api/v1/production_orders/:production_order_id/tasks/:id - Eliminar tarea
@@ -37,6 +40,7 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] PATCH /api/v1/production_orders/:production_order_id/tasks/:id/reopen - Reabrir tarea
 
 ### Funcionalidades de Búsqueda y Filtrado
+
 - [x] Integración de Ransack para búsquedas avanzadas
 - [x] Configuración ransackable_attributes en todos los modelos
 - [x] Configuración ransackable_associations en todos los modelos
@@ -45,7 +49,45 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] Filtrado por rangos de fecha
 - [x] Paginación con Kaminari (20 items por defecto, máximo 100)
 
+### Autenticación JWT
+
+- [x] Implementación de JWT (JsonWebToken service)
+- [x] POST /api/v1/auth/login - Login con JWT
+- [x] POST /api/v1/auth/logout - Logout
+- [x] POST /api/v1/auth/refresh - Refresh token
+- [x] Authentication middleware con JWT en ApplicationController
+- [x] Autoload de app/services configurado
+
+### Autorización con Pundit
+
+- [x] **Implementación completa de Pundit**
+- [x] ProductionOrderPolicy con permisos granulares por rol
+- [x] TaskPolicy con permisos granulares por rol
+- [x] UserPolicy con permisos granulares por rol
+- [x] NormalOrderPolicy (hereda de ProductionOrderPolicy)
+- [x] UrgentOrderPolicy (hereda de ProductionOrderPolicy)
+- [x] Scopes para filtrado automático según rol y asignaciones
+- [x] Integración en todos los controllers (Users, ProductionOrders, Tasks)
+- [x] Manejo de errores de autorización (403 Forbidden)
+
+### API Endpoints - Users
+
+- [x] GET /api/v1/users - Listar usuarios con paginación
+- [x] GET /api/v1/users/:id - Ver detalle de usuario con estadísticas
+- [x] POST /api/v1/users - Crear usuario (solo admin)
+- [x] PATCH /api/v1/users/:id - Actualizar usuario
+- [x] DELETE /api/v1/users/:id - Eliminar usuario (solo admin)
+- [x] Autorización con Pundit integrada
+
+### API Endpoints - Order Assignments
+
+- [x] POST /api/v1/order_assignments - Asignar usuario a orden
+- [x] DELETE /api/v1/order_assignments/:id - Quitar asignación
+- [x] Asignación de usuarios durante creación de orden (user_ids parameter)
+- [x] Actualización de asignaciones durante update de orden
+
 ### Testing
+
 - [x] Model specs para User
 - [x] Model specs para ProductionOrder, NormalOrder, UrgentOrder
 - [x] Model specs para Task
@@ -53,75 +95,52 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] Controller specs para ProductionOrdersController
 - [x] Integration specs para API endpoints
 - [x] Integration specs para autenticación JWT
+- [x] **Policy specs para UserPolicy (14 tests)**
+- [x] **Policy specs para ProductionOrderPolicy (36 tests)**
+- [x] **Policy specs para TaskPolicy (37 tests)**
 - [x] Factories con FactoryBot
-- [x] 113 tests pasando exitosamente
+- [x] **200 tests pasando exitosamente (113 originales + 87 de policies)**
 
 ### Infraestructura
+
 - [x] Concerns para manejo de errores (Api::ErrorHandling)
 - [x] Concerns para respuestas estandarizadas (Api::ResponseHelpers)
 - [x] Serialización manual de respuestas JSON
 - [x] Configuración de CORS
 - [x] Health check endpoint
 
-### Autenticación JWT
-- [x] Implementación de JWT (JsonWebToken service)
-- [x] POST /api/v1/auth/login - Login con JWT
-- [x] POST /api/v1/auth/logout - Logout
-- [x] POST /api/v1/auth/refresh - Refresh token
-- [x] Authentication middleware con JWT en ApplicationController
-- [x] Tests de integración para autenticación (113 tests pasando)
-- [x] Autoload de app/services configurado
-
-### API Endpoints - Users
-- [x] GET /api/v1/users - Listar usuarios con paginación
-- [x] GET /api/v1/users/:id - Ver detalle de usuario con estadísticas
-- [x] POST /api/v1/users - Crear usuario (solo admin)
-- [x] PATCH /api/v1/users/:id - Actualizar usuario
-- [x] DELETE /api/v1/users/:id - Eliminar usuario (solo admin)
-- [x] Autorización básica por roles
-
-### API Endpoints - Order Assignments
-- [x] POST /api/v1/order_assignments - Asignar usuario a orden
-- [x] DELETE /api/v1/order_assignments/:id - Quitar asignación
-- [x] Asignación de usuarios durante creación de orden (user_ids parameter)
-- [x] Actualización de asignaciones durante update de orden
-
 ### Documentación
+
 - [x] API.md completo con todos los endpoints
 - [x] Ejemplos de requests/responses
 - [x] Documentación de autenticación JWT
+- [x] Documentación de autorización y roles con Pundit
 - [x] Códigos de error documentados
 - [x] Filtros Ransack documentados
 
 ## ❌ Pendiente
 
-### Autenticación y Autorización
-- [ ] **IMPORTANTE**: Implementar Pundit para autorización granular
-  - `app/controllers/api/v1/production_orders_controller.rb:10,226`
-  - `app/controllers/api/v1/tasks_controller.rb:84,93`
-  - `app/controllers/api/v1/order_assignments_controller.rb:50`
-  - Actualmente usa lógica básica de roles en authorized_orders
-
-### API Endpoints Faltantes
-- [ ] GET /api/v1/production_orders/:production_order_id/tasks - Listar todas las tasks de una orden
-  - Actualmente se obtienen tasks via GET /production_orders/:id (incluye tasks en response)
-  - Considerado: ¿es necesario un endpoint dedicado solo para listar tasks?
-
 ### Funcionalidades de Negocio
-- [ ] Validación de que deadline de UrgentOrder no puede ser anterior a start_date
-- [ ] Validación de que expected_end_date no puede ser anterior a start_date
+
+- [x] **Validación de que deadline de UrgentOrder no puede ser anterior a start_date**
+- [x] **Validación de que expected_end_date no puede ser anterior a start_date**
 - [ ] Cálculo automático de order_number al cambiar tipo de orden
-- [ ] Notificaciones para tareas vencidas (requiere Sidekiq)
-- [ ] Notificaciones para órdenes urgentes próximas a deadline
+- [x] **Notificaciones para tareas vencidas (implementado con Sidekiq)**
+- [x] **Notificaciones para órdenes urgentes próximas a deadline (implementado con Sidekiq)**
 - [ ] Logs de auditoría para cambios en órdenes
 
 ### Background Jobs (Sidekiq)
-- [ ] Configurar Sidekiq y Redis
-- [ ] Job para envío de notificaciones de tareas vencidas
-- [ ] Job para envío de recordatorios de deadlines
+
+- [x] **Configurar Sidekiq y Redis**
+- [x] **Job para envío de notificaciones de tareas vencidas (ExpiredTasksNotificationJob)**
+- [x] **Job para envío de recordatorios de deadlines (UrgentDeadlineReminderJob)**
+- [x] **Scheduling automático con Whenever (cron jobs)**
+- [x] **Documentación de scheduling (SCHEDULING.md)**
 - [ ] Job para generación de reportes periódicos
+- [x] **Tests de jobs (12 tests)**
 
 ### Optimizaciones
+
 - [ ] Implementar fast_jsonapi para serialización (gem ya instalada, serialización manual actual funciona)
 - [ ] Agregar índices adicionales para queries comunes
 - [ ] Implementar caché para estadísticas mensuales
@@ -129,12 +148,17 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] Includes optimizados en queries principales (.includes(:creator, :assigned_users, :tasks))
 
 ### Testing Adicional
-- [ ] Tests de autorización con Pundit
+
 - [ ] Tests de performance para queries complejas
-- [ ] Tests de integración para background jobs
-- [ ] Tests de validaciones de fechas
+- [x] **Tests de background jobs (12 tests)**
+- [x] **Tests de validaciones de fechas (6 tests agregados)**
+
+### Seeds
+
+- [ ] Crear seeds para generar datos de prueba a penas se inicialice la base de datos
 
 ### DevOps y Deployment
+
 - [ ] Configuración de ambientes (staging, production)
 - [ ] Variables de ambiente documentadas (.env.example)
 - [ ] Docker setup
@@ -143,26 +167,29 @@ Basado en requirements.pdf y análisis del código actual.
 
 ## 📊 Resumen
 
-**Completado**: ~85%
+**Completado**: ~95%
+
 - ✅ Modelos y relaciones: 100%
 - ✅ API CRUD completo: 100%
-- ✅ Tests: 100% (113 tests passing)
+- ✅ Tests: 100% (218 tests passing - 113 originales + 87 policies + 6 date validations + 12 jobs)
 - ✅ Autenticación JWT: 100%
-- ✅ Autorización básica por roles: 100%
+- ✅ **Autorización granular con Pundit: 100%**
+- ✅ **Validaciones de fechas: 100%**
+- ✅ **Background Jobs con Sidekiq: 100%** (2 jobs implementados y testeados)
 - ✅ Documentación API (API.md): 100%
-- ❌ Autorización granular (Pundit): 0%
-- ❌ Background Jobs: 0%
 - ❌ DevOps/Docker: 0%
 
 ## 🎯 Prioridades Sugeridas
 
-1. **Alta Prioridad** (Mejoras de seguridad):
-   - Implementar Pundit para autorización granular por recursos
-   - Validaciones de fechas (expected_end_date >= start_date, deadline >= start_date)
+1. **Alta Prioridad** (Completadas):
+
+   - ✅ Background jobs para notificaciones (Sidekiq)
+   - ✅ Validaciones de fechas
 
 2. **Media Prioridad** (Funcionalidad adicional):
-   - Background jobs para notificaciones (Sidekiq)
+
    - Endpoint GET /tasks para listar tasks de una orden (si se considera necesario)
+   - Logs de auditoría para cambios en órdenes
 
 3. **Baja Prioridad** (Nice to have):
    - Swagger/OpenAPI documentation

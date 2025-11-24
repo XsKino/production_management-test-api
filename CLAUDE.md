@@ -94,18 +94,67 @@ def self.ransackable_associations(auth_object = nil)
 end
 ```
 
-### User Roles & Authorization
+### User Roles & Authorization with Pundit
 
-Three role levels (enum-based):
-- `operator` (0) - Basic access
-- `production_manager` (1) - Elevated permissions
-- `admin` (2) - Full access
+Three role levels (string-based):
+- `operator` - Read-only access to assigned orders, can only change task status
+- `production_manager` - Can create/manage orders and tasks they're assigned to or created
+- `admin` - Full access to all resources
 
-Authorization logic in `authorized_orders` method:
-- Admin: Access to all orders
-- Manager/Operator: Only orders they created or are assigned to
+**Pundit Implementation**: Fully integrated with policies for all resources:
 
-**Note**: Pundit authorization is planned but currently uses basic case statements. Look for `TODO: Replace with Pundit` comments.
+#### Policy Classes
+- `ProductionOrderPolicy` - Base policy for production orders
+  - `NormalOrderPolicy` - Inherits from ProductionOrderPolicy (for STI)
+  - `UrgentOrderPolicy` - Inherits from ProductionOrderPolicy (for STI)
+- `TaskPolicy` - Policies for task operations
+- `UserPolicy` - Policies for user management
+
+#### Key Authorization Rules
+
+**Production Orders:**
+- Admin: Full CRUD on all orders
+- Production Manager: Can create orders, CRUD on assigned/created orders
+- Operator: Can only view assigned orders (read-only)
+
+**Tasks:**
+- Admin: Full CRUD on all tasks
+- Production Manager: Full CRUD on tasks from assigned/created orders
+- Operator: Can only complete/reopen tasks from assigned orders (no create/update/delete)
+
+**Users:**
+- Admin: Full CRUD on all users
+- Production Manager/Operator: Can view all users, update own profile only
+
+#### Scopes
+Pundit scopes automatically filter records based on role:
+- Admin: See everything
+- Manager/Operator: Only see orders/tasks they're assigned to or created
+
+#### Usage in Controllers
+```ruby
+# Authorize single record
+authorize @production_order
+
+# Authorize collection (index actions)
+authorize ProductionOrder
+
+# Apply scope filtering
+@orders = policy_scope(ProductionOrder)
+
+# Authorize custom actions
+authorize @task, :complete?
+```
+
+#### Authorization Errors
+Pundit raises `Pundit::NotAuthorizedError` which is caught by `ApplicationController` and returns:
+```json
+{
+  "success": false,
+  "message": "You are not authorized to perform this action",
+  "code": "FORBIDDEN"
+}
+```
 
 ### Order-Task Relationship
 
@@ -121,12 +170,74 @@ Important distinction:
 - In tests, use `.to_date` when converting from Time objects
 - For date range queries in specs, ensure dates fall within the expected period (e.g., use `Date.current.end_of_month` instead of `2.weeks.from_now`)
 
+### Background Jobs with Sidekiq
+
+**Configuration:**
+- ActiveJob configured to use Sidekiq adapter
+- Redis running on `localhost:6379` (configurable via `REDIS_URL` env var)
+- Three queues: `critical`, `default`, `low`
+- Configuration file: `config/sidekiq.yml`
+
+**Implemented Jobs:**
+
+**ExpiredTasksNotificationJob** (queue: `default`)
+- Finds all pending tasks with `expected_end_date < Date.current`
+- Notifies creator and assigned users for each expired task
+- Run manually: `ExpiredTasksNotificationJob.perform_later`
+- Typical schedule: Daily at 2:00 AM
+
+**UrgentDeadlineReminderJob** (queue: `critical`)
+- Finds urgent orders with deadlines 1-2 days away
+- Notifies creator and assigned users
+- Run manually: `UrgentDeadlineReminderJob.perform_later`
+- Typical schedule: Daily at 9:00 AM
+
+**Running Sidekiq:**
+```bash
+# Start Redis server
+redis-server
+
+# Start Sidekiq worker (in separate terminal)
+bundle exec sidekiq
+
+# Run job immediately in console
+ExpiredTasksNotificationJob.perform_now
+
+# Enqueue job for background processing
+ExpiredTasksNotificationJob.perform_later
+```
+
+**Scheduling Jobs (Whenever):**
+- Jobs are automatically scheduled via cron using the `whenever` gem
+- Configuration: `config/schedule.rb`
+- ExpiredTasksNotificationJob: Daily at 2:00 AM
+- UrgentDeadlineReminderJob: Daily at 9:00 AM and 5:00 PM
+
+```bash
+# Preview crontab
+bundle exec whenever
+
+# Install to crontab
+bundle exec whenever --update-crontab
+
+# Remove from crontab
+bundle exec whenever --clear-crontab
+```
+
+**Testing Jobs:**
+- Test environment uses `:test` adapter (not Sidekiq)
+- Use `perform_now` for synchronous execution in tests
+- Jobs inherit from `ApplicationJob` with auto-retry on deadlocks
+
+See [SCHEDULING.md](SCHEDULING.md) for complete scheduling documentation.
+
 ## Testing Patterns
 
 ### RSpec Configuration
 - Uses transactional fixtures
 - FactoryBot for test data
 - Shoulda matchers for model validations
+- Pundit matchers for policy testing (pundit-matchers gem v4.0)
 - Request specs for integration testing
 
 ### Common Test Patterns
@@ -146,8 +257,73 @@ end
 post "/api/v1/endpoint", headers: headers, params: params, as: :json
 ```
 
+**Policy specs** (using pundit-matchers 4.0 syntax):
+```ruby
+RSpec.describe ProductionOrderPolicy, type: :policy do
+  describe '#create?' do
+    subject { described_class.new(user, ProductionOrder.new) }
+
+    context 'as admin' do
+      let(:user) { create(:user, role: 'admin') }
+      it { is_expected.to permit_action(:create) }
+    end
+
+    context 'as operator' do
+      let(:user) { create(:user, role: 'operator') }
+      it { is_expected.to forbid_action(:create) }
+    end
+  end
+end
+```
+
+**Important**: pundit-matchers v4.0 uses `permit_action(:action)` and `forbid_action(:action)` instead of the deprecated `permit(user, record)` syntax.
+
+**Factory usage with STI**: Always use specific subclass factories:
+```ruby
+create(:normal_order)    # ✅ Correct
+create(:urgent_order)    # ✅ Correct
+create(:production_order) # ❌ Will fail - type column cannot be null
+```
+
 ## Key Files
 
+### Controllers & Concerns
 - `app/controllers/concerns/api/error_handling.rb` - Centralized error handling
-- `app/controllers/api/v1/application_controller.rb` - Base API controller with auth and pagination helpers
+- `app/controllers/concerns/api/response_helpers.rb` - Standardized response formatting
+- `app/controllers/api/v1/application_controller.rb` - Base API controller with auth, pagination helpers, and Pundit integration
+
+### Models
 - `app/models/production_order.rb` - Base STI model with auto-incrementing order numbers
+- `app/models/normal_order.rb` - Standard production order
+- `app/models/urgent_order.rb` - Urgent order with deadline
+- `app/models/task.rb` - Tasks belonging to production orders
+- `app/models/user.rb` - User model with role-based authentication
+- `app/models/order_assignment.rb` - Join table for user-order assignments
+
+### Policies (Pundit)
+- `app/policies/application_policy.rb` - Base policy with default deny-all behavior
+- `app/policies/production_order_policy.rb` - Authorization for production orders
+- `app/policies/normal_order_policy.rb` - Inherits from ProductionOrderPolicy (for STI)
+- `app/policies/urgent_order_policy.rb` - Inherits from ProductionOrderPolicy (for STI)
+- `app/policies/task_policy.rb` - Authorization for tasks with operator restrictions
+- `app/policies/user_policy.rb` - Authorization for user management
+
+### Services
+- `app/services/json_web_token.rb` - JWT encoding/decoding service
+
+### Background Jobs (Sidekiq + Whenever)
+- `app/jobs/application_job.rb` - Base job class with error handling
+- `app/jobs/expired_tasks_notification_job.rb` - Notifies users about expired tasks
+- `app/jobs/urgent_deadline_reminder_job.rb` - Reminds users about approaching urgent deadlines
+- `config/sidekiq.yml` - Sidekiq configuration (queues, concurrency)
+- `config/initializers/sidekiq.rb` - Redis connection configuration
+- `config/schedule.rb` - Whenever cron job scheduling configuration
+- `SCHEDULING.md` - Complete documentation for background job scheduling
+
+### Test Files
+- `spec/policies/` - Policy authorization tests (87 tests)
+- `spec/jobs/` - Background job tests (12 tests)
+- `spec/models/` - Model unit tests
+- `spec/controllers/` - Controller tests
+- `spec/requests/` - Integration/request tests
+- `spec/factories/` - FactoryBot factory definitions

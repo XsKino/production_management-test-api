@@ -10,6 +10,60 @@ All endpoints (except login) require JWT authentication via the `Authorization` 
 Authorization: Bearer <jwt_token>
 ```
 
+## Authorization & Roles
+
+The API uses **Pundit** for granular authorization. There are three user roles with different permission levels:
+
+### Role Hierarchy
+
+1. **Admin (`admin`)** - Full access to all resources
+2. **Production Manager (`production_manager`)** - Can manage orders and tasks they're assigned to or created
+3. **Operator (`operator`)** - Read-only access to assigned orders, can only change task status
+
+### Production Orders Permissions
+
+| Action              | Admin        | Production Manager              | Operator             |
+| ------------------- | ------------ | ------------------------------- | -------------------- |
+| **View orders**     | All orders   | Assigned or created orders only | Assigned orders only |
+| **Create order**    | ✅ Yes       | ✅ Yes                          | ❌ No                |
+| **Update order**    | ✅ Any order | ✅ Assigned/created orders only | ❌ No                |
+| **Delete order**    | ✅ Any order | ✅ Created orders only          | ❌ No                |
+| **View statistics** | ✅ Yes       | ✅ Yes                          | ✅ Yes               |
+
+### Tasks Permissions
+
+| Action            | Admin        | Production Manager                    | Operator                      |
+| ----------------- | ------------ | ------------------------------------- | ----------------------------- |
+| **View tasks**    | All tasks    | Tasks from assigned/created orders    | Tasks from assigned orders    |
+| **Create task**   | ✅ Any order | ✅ Assigned/created orders            | ❌ No                         |
+| **Update task**   | ✅ Any task  | ✅ Tasks from assigned/created orders | ❌ No                         |
+| **Delete task**   | ✅ Any task  | ✅ Tasks from assigned/created orders | ❌ No                         |
+| **Complete task** | ✅ Any task  | ✅ Tasks from assigned/created orders | ✅ Tasks from assigned orders |
+| **Reopen task**   | ✅ Any task  | ✅ Tasks from assigned/created orders | ✅ Tasks from assigned orders |
+
+### Users Permissions
+
+| Action          | Admin        | Production Manager  | Operator            |
+| --------------- | ------------ | ------------------- | ------------------- |
+| **View users**  | ✅ All users | ✅ All users        | ✅ All users        |
+| **Create user** | ✅ Yes       | ❌ No               | ❌ No               |
+| **Update user** | ✅ Any user  | ✅ Own profile only | ✅ Own profile only |
+| **Delete user** | ✅ Yes       | ❌ No               | ❌ No               |
+
+### Authorization Errors
+
+When a user attempts an unauthorized action, the API returns:
+
+**Response (403 Forbidden):**
+
+```json
+{
+  "success": false,
+  "message": "You are not authorized to perform this action",
+  "code": "FORBIDDEN"
+}
+```
+
 ### POST /auth/login
 
 Authenticate user and receive JWT token.
