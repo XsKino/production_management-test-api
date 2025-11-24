@@ -1358,4 +1358,5 @@ Common error codes returned by the API:
 - All requests must include `Content-Type: application/json` header for POST/PUT/PATCH requests
 - Order numbers are automatically generated with format: `NO-YYYY-XXX` (NormalOrder) or `UO-YYYY-XXX` (UrgentOrder)
 - **Audit Logging**: All changes to production orders are automatically tracked with user information, IP address, and timestamp. Audit logs are preserved even when orders are deleted.
+- **Caching**: Monthly statistics are cached per user/role/month for improved performance. Cache is automatically invalidated when orders are created, updated, or deleted in the current month. Cache expires at the end of each month.
 - Pagination defaults to 20 items per page, maximum 100 items per page

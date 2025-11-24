@@ -99,7 +99,8 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Policy specs para ProductionOrderPolicy (36 tests)**
 - [x] **Policy specs para TaskPolicy (37 tests)**
 - [x] Factories con FactoryBot
-- [x] **229 tests pasando exitosamente (includes model, controller, integration, policy, job, and mailer specs)**
+- [x] **Tests de caché para estadísticas mensuales (7 tests)**
+- [x] **260 tests pasando exitosamente (includes model, controller, integration, policy, job, mailer, and caching specs)**
 
 ### Infraestructura
 
@@ -127,8 +128,6 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Documentación de scheduling (SCHEDULING.md)**
 - [x] **Tests de jobs (12 tests)**
 
-## ❌ Pendiente
-
 ### Funcionalidades de Negocio
 
 - [x] **Validación de que deadline de UrgentOrder no puede ser anterior a start_date**
@@ -137,25 +136,23 @@ Basado en requirements.pdf y análisis del código actual.
 - [x] **Notificaciones para tareas vencidas (implementado con Sidekiq)**
 - [x] **Notificaciones para órdenes urgentes próximas a deadline (implementado con Sidekiq)**
 - [x] **Logs de auditoría para cambios en órdenes**
-  - Modelo OrderAuditLog con tracking completo
-  - Concern Auditable para logging automático (create, update, delete)
-  - Detección de cambios específicos (status_changed, type_changed)
-  - Endpoint GET /api/v1/production_orders/:id/audit_logs
-  - Contexto de auditoría (Current.user, IP, User Agent)
-  - 24 tests para auditoría
+
+## ❌ Pendiente
 
 ### Optimizaciones
 
 - [x] **Implementar fast_jsonapi para serialización**
-  - UserSerializer
-  - ProductionOrderSerializer (base para STI)
-  - NormalOrderSerializer
-  - UrgentOrderSerializer
-  - TaskSerializer
-  - Todos los controladores actualizados
-- [ ] Agregar índices adicionales para queries comunes
-- [ ] Implementar caché para estadísticas mensuales
-- [ ] N+1 query prevention con bullet gem
+- [x] **Agregar índices adicionales para queries comunes**
+- [x] **Implementar caché para estadísticas mensuales**
+  - Rails.cache.fetch con cache keys por usuario/rol/mes
+  - Expiración automática al final del mes
+  - Invalidación automática en create/update/delete de órdenes
+  - 7 tests de caché
+- [x] **N+1 query prevention con bullet gem**
+  - Bullet configurado en development y test
+  - Detecta y reporta N+1 queries automáticamente
+  - Todos los serializers optimizados con .size en lugar de .count
+  - Eager loading con .includes en todas las queries principales
 - [x] Includes optimizados en queries principales (.includes(:creator, :assigned_users, :tasks))
 
 ### Testing Adicional

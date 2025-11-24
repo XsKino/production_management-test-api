@@ -42,4 +42,7 @@ group :development, :test do
   gem "shoulda-matchers"
   gem "pundit-matchers"
   gem "database_cleaner-active_record"
+
+  # N+1 query detection
+  gem "bullet"
 end

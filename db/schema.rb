@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2025_11_24_180951) do
+ActiveRecord::Schema[8.1].define(version: 2025_11_24_183554) do
   create_table "order_assignments", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "production_order_id", null: false
@@ -47,7 +47,11 @@ ActiveRecord::Schema[8.1].define(version: 2025_11_24_180951) do
     t.string "type", null: false
     t.datetime "updated_at", null: false
     t.index ["creator_id"], name: "index_production_orders_on_creator_id"
+    t.index ["status", "updated_at"], name: "index_production_orders_on_status_and_updated_at"
+    t.index ["type", "deadline"], name: "index_production_orders_on_type_and_deadline"
     t.index ["type", "order_number"], name: "index_production_orders_on_type_and_order_number", unique: true
+    t.index ["type", "start_date"], name: "index_production_orders_on_type_and_start_date"
+    t.index ["type", "status"], name: "index_production_orders_on_type_and_status"
   end
 
   create_table "tasks", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -57,7 +61,9 @@ ActiveRecord::Schema[8.1].define(version: 2025_11_24_180951) do
     t.bigint "production_order_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.index ["production_order_id", "status"], name: "index_tasks_on_production_order_and_status"
     t.index ["production_order_id"], name: "index_tasks_on_production_order_id"
+    t.index ["status", "expected_end_date"], name: "index_tasks_on_status_and_expected_end_date"
   end
 
   create_table "users", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -68,6 +74,7 @@ ActiveRecord::Schema[8.1].define(version: 2025_11_24_180951) do
     t.integer "role", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["role"], name: "index_users_on_role"
   end
 
   add_foreign_key "order_assignments", "production_orders"

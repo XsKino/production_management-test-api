@@ -14,12 +14,13 @@ class ProductionOrderSerializer
   has_many :assigned_users, serializer: :user
 
   # Add computed attributes
+  # Use .size instead of .count to leverage eager-loaded associations
   attribute :tasks_count do |order|
-    order.tasks.count
+    order.tasks.size
   end
 
   attribute :completed_tasks_count do |order|
-    order.tasks.where(status: :completed).count
+    order.tasks.select(&:completed?).size
   end
 
   attribute :is_urgent do |order|
