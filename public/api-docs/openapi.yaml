@@ -536,7 +536,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/productionOrderIdNested"
       requestBody:
         required: true
         content:
@@ -572,7 +572,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/productionOrderIdNested"
         - $ref: "#/components/parameters/taskId"
       requestBody:
         required: true
@@ -610,7 +610,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/productionOrderIdNested"
         - $ref: "#/components/parameters/taskId"
       responses:
         "200":
@@ -636,7 +636,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/productionOrderIdNested"
         - $ref: "#/components/parameters/taskId"
       responses:
         "200":
@@ -667,7 +667,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
-        - $ref: "#/components/parameters/productionOrderId"
+        - $ref: "#/components/parameters/productionOrderIdNested"
         - $ref: "#/components/parameters/taskId"
       responses:
         "200":
@@ -935,12 +935,22 @@ components:
 
   parameters:
     productionOrderId:
-      name: production_order_id
+      name: id
       in: path
       required: true
       description: Production order ID
       schema:
         type: integer
+        example: 1
+
+    productionOrderIdNested:
+      name: production_order_id
+      in: path
+      required: true
+      description: Production order ID (for nested routes)
+      schema:
+        type: integer
+        example: 1
 
     taskId:
       name: id
@@ -949,6 +959,7 @@ components:
       description: Task ID
       schema:
         type: integer
+        example: 1
 
     userId:
       name: id
@@ -957,6 +968,7 @@ components:
       description: User ID
       schema:
         type: integer
+        example: 1
 
   schemas:
     # ==========================================

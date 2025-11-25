@@ -1,8 +1,8 @@
-# 🚀 Production Orders Management System API
+# Production Orders Management System API
 
 Sistema de gestión de órdenes de producción con autenticación JWT, autorización por roles (Pundit), background jobs (Sidekiq), y optimizaciones de performance.
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
 - [Demo en Vivo](#-demo-en-vivo)
 - [Características Principales](#-características-principales)
@@ -18,7 +18,7 @@ Sistema de gestión de órdenes de producción con autenticación JWT, autorizac
 
 ---
 
-## 🌐 Demo en Vivo
+## Demo en Vivo
 
 **API Base URL**: https://kiuey-test-api.up.railway.app/api/v1
 **API Documentation (Swagger)**: https://kiuey-test-api.up.railway.app/api-docs
@@ -39,7 +39,7 @@ curl -X POST https://kiuey-test-api.up.railway.app/api/v1/auth/login \
 
 ---
 
-## ✨ Características Principales
+## Características Principales
 
 - **Autenticación JWT** con refresh tokens
 - **Autorización granular** con Pundit (3 roles: admin, production_manager, operator)
@@ -54,7 +54,7 @@ curl -X POST https://kiuey-test-api.up.railway.app/api/v1/auth/login \
 
 ---
 
-## 🛠 Stack Tecnológico
+## Stack Tecnológico
 
 - **Ruby** 3.3.6
 - **Rails** 8.1.1 (API mode)
@@ -71,7 +71,7 @@ curl -X POST https://kiuey-test-api.up.railway.app/api/v1/auth/login \
 
 ---
 
-## 🚀 Opciones de Ejecución
+## Maneras de ejecutar el proyecto
 
 ### Opción 1: Usar API Remota (Railway)
 
@@ -80,15 +80,16 @@ curl -X POST https://kiuey-test-api.up.railway.app/api/v1/auth/login \
 La API ya está desplegada y funcionando con datos de prueba completos:
 
 - **API Base**: `https://kiuey-test-api.up.railway.app/api/v1`
-- **Swagger UI**: `https://kiuey-test-api.up.railway.app/api-docs`
+- **Swagger API Docs**: `https://kiuey-test-api.up.railway.app/api-docs`
 - **Health Check**: `https://kiuey-test-api.up.railway.app/up`
 
 **Usuarios disponibles:**
+
 - Admin: `admin@empresa.com` / `password123`
 - Manager: `manager@empresa.com` / `password123`
 - Operator: `operator@empresa.com` / `password123`
 
-**Configuración en tu frontend:**
+**Configuración en el frontend:**
 
 ```javascript
 const API_URL = "https://kiuey-test-api.up.railway.app/api/v1"
@@ -96,9 +97,9 @@ const API_URL = "https://kiuey-test-api.up.railway.app/api/v1"
 // Ejemplo de login
 const login = async (email, password) => {
   const response = await fetch(`${API_URL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password })
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
   })
   return await response.json()
 }
@@ -141,6 +142,7 @@ docker-compose exec web bundle exec rails db:seed
 ```
 
 Esto creará:
+
 - 15 usuarios (2 admins, 5 managers, 8 operadores)
 - ~79 órdenes de producción
 - ~356 tareas
