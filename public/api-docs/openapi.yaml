@@ -994,6 +994,9 @@ components:
         created_at:
           type: string
           format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     UserDetail:
       allOf:
@@ -1157,13 +1160,16 @@ components:
               items:
                 type: object
                 required:
-                  - title
                   - description
+                  - expected_end_date
                 properties:
-                  title:
-                    type: string
                   description:
                     type: string
+                    example: Preparar materiales para la orden
+                  expected_end_date:
+                    type: string
+                    format: date
+                    example: "2024-02-15"
 
     ProductionOrderUpdate:
       type: object
@@ -1197,12 +1203,13 @@ components:
         id:
           type: integer
           example: 1
-        title:
-          type: string
-          example: Preparar materiales
         description:
           type: string
-          example: Verificar disponibilidad de materias primas
+          example: Verificar disponibilidad de materias primas y preparar materiales
+        expected_end_date:
+          type: string
+          format: date
+          example: "2024-02-15"
         status:
           type: string
           enum: [pending, completed]
@@ -1225,27 +1232,36 @@ components:
         task:
           type: object
           required:
-            - title
             - description
+            - expected_end_date
           properties:
-            title:
-              type: string
             description:
               type: string
+              example: Preparar materiales para producción
+            expected_end_date:
+              type: string
+              format: date
+              example: "2024-02-15"
 
     TaskUpdate:
       type: object
+      required:
+        - task
       properties:
         task:
           type: object
           properties:
-            title:
-              type: string
             description:
               type: string
+              example: Actualizar materiales para producción
+            expected_end_date:
+              type: string
+              format: date
+              example: "2024-02-20"
             status:
               type: string
               enum: [pending, completed]
+              example: completed
 
     # ==========================================
     # ORDER ASSIGNMENT SCHEMAS
@@ -1260,6 +1276,9 @@ components:
         production_order_id:
           type: integer
         created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
 
