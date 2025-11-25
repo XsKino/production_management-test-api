@@ -47,6 +47,7 @@ info:
     url: https://github.com/XsKino/production_management-test-api
   license:
     name: MIT
+    identifier: MIT
 
 servers:
   - url: https://kiuey-test-api.up.railway.app/api/v1
@@ -81,6 +82,7 @@ paths:
       summary: Login with email and password
       description: Authenticate user and receive JWT token
       operationId: login
+      security: []
       requestBody:
         required: true
         content:
@@ -1397,88 +1399,3 @@ components:
               details:
                 email: ["no puede estar en blanco"]
                 password: ["es demasiado corto (mínimo 8 caracteres)"]
-      ErrorResponse:
-        type: object
-        properties:
-          success:
-            type: boolean
-            example: false
-          error:
-            type: object
-            properties:
-              code:
-                type: string
-                example: validation_error
-              message:
-                type: string
-                example: Errores de validación
-              details:
-                type: object
-                additionalProperties: true
-      Pagination:
-        type: object
-        properties:
-          current_page:
-            type: integer
-            example: 1
-          per_page:
-            type: integer
-            example: 20
-          total_pages:
-            type: integer
-            example: 5
-          total_count:
-            type: integer
-            example: 95
-
-      responses:
-        Unauthorized:
-          description: Authentication required or token invalid
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                success: false
-                error:
-                  code: unauthorized
-                  message: Token inválido o expirado
-
-        Forbidden:
-          description: Insufficient permissions
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                success: false
-                error:
-                  code: forbidden
-                  message: No tienes permisos para realizar esta acción
-
-        NotFound:
-          description: Resource not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                success: false
-                error:
-                  code: not_found
-                  message: Recurso no encontrado
-
-        ValidationError:
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-              example:
-                success: false
-                error:
-                  code: validation_error
-                  message: Errores de validación
-                  details:
-                    email: ["no puede estar en blanco"]
-                    password: ["es demasiado corto (mínimo 8 caracteres)"]
