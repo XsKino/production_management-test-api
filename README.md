@@ -141,6 +141,15 @@ docker-compose logs -f web
 docker-compose exec web bundle exec rails db:seed
 ```
 
+```bash
+# Si se desea testear con una database vacía hay que ignorar el comando de arriba,
+# en cuyo caso, habrá que crear un usuario con rol :admin desde rails console
+# Para poder hacer login con ese usuario y crear más usuarios con otros roles
+# Además de gestionar el resto de recursos de la API
+docker-compose exec web bundle exec rails console
+>>> User.create!({name: "Admin", email: "admin@empresa.com", password: :admin})
+```
+
 Esto creará:
 
 - 15 usuarios (2 admins, 5 managers, 8 operadores)

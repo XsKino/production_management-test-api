@@ -1010,39 +1010,57 @@ components:
     UserCreate:
       type: object
       required:
-        - email
-        - name
-        - password
-        - role
+        - user
       properties:
-        email:
-          type: string
-          format: email
-        name:
-          type: string
-        password:
-          type: string
-          format: password
-          minLength: 8
-        role:
-          type: string
-          enum: [admin, production_manager, operator]
+        user:
+          type: object
+          required:
+            - email
+            - name
+            - password
+            - role
+          properties:
+            email:
+              type: string
+              format: email
+              example: nuevo.usuario@empresa.com
+            name:
+              type: string
+              example: Nuevo Usuario
+            password:
+              type: string
+              format: password
+              minLength: 8
+              example: password123
+            role:
+              type: string
+              enum: [admin, production_manager, operator]
+              example: operator
 
     UserUpdate:
       type: object
+      required:
+        - user
       properties:
-        email:
-          type: string
-          format: email
-        name:
-          type: string
-        password:
-          type: string
-          format: password
-          minLength: 8
-        role:
-          type: string
-          enum: [admin, production_manager, operator]
+        user:
+          type: object
+          properties:
+            email:
+              type: string
+              format: email
+              example: usuario.actualizado@empresa.com
+            name:
+              type: string
+              example: Usuario Actualizado
+            password:
+              type: string
+              format: password
+              minLength: 8
+              example: newpassword123
+            role:
+              type: string
+              enum: [admin, production_manager, operator]
+              example: production_manager
 
     # ==========================================
     # PRODUCTION ORDER SCHEMAS
