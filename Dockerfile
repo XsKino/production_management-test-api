@@ -41,12 +41,10 @@ ENV RAILS_ENV="production"
 # Exponer puerto 3000
 EXPOSE 3000
 
-# Health check
+# Health check (Railway usa PORT dinámico)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/up || exit 1
-
-# Entrypoint prepara la base de datos
-ENTRYPOINT ["/rails/bin/docker-entrypoint"]
+  CMD wget --no-verbose --tries=1 --spider http://localhost:${PORT:-3000}/up || exit 1
 
 # Comando por defecto: iniciar Rails server
-CMD ["./bin/rails", "server", "-b", "0.0.0.0"]
+# Railway provee PORT dinámicamente, usar 3000 como fallback
+CMD ["sh", "-c", "bundle exec rails db:prepare && bundle exec rails server -b 0.0.0.0 -p ${PORT:-3000}"]
