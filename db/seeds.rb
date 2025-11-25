@@ -28,8 +28,8 @@ puts "👥 Creating users..."
 # Create admins (2)
 admins = [
   User.create!(
-    name: 'Carlos Rodríguez',
-    email: 'carlos.rodriguez@empresa.com',
+    name: 'Admin',
+    email: 'admin@empresa.com',
     password: 'password123',
     role: :admin
   ),
@@ -43,7 +43,7 @@ admins = [
 
 # Create production managers (5)
 managers = [
-  User.create!(name: 'Roberto Silva', email: 'roberto.silva@empresa.com', password: 'password123', role: :production_manager),
+  User.create!(name: 'Manager', email: 'manager@empresa.com', password: 'password123', role: :production_manager),
   User.create!(name: 'Ana Martínez', email: 'ana.martinez@empresa.com', password: 'password123', role: :production_manager),
   User.create!(name: 'Luis Fernández', email: 'luis.fernandez@empresa.com', password: 'password123', role: :production_manager),
   User.create!(name: 'Patricia Gómez', email: 'patricia.gomez@empresa.com', password: 'password123', role: :production_manager),
@@ -52,7 +52,7 @@ managers = [
 
 # Create operators (8)
 operators = [
-  User.create!(name: 'Miguel Torres', email: 'miguel.torres@empresa.com', password: 'password123', role: :operator),
+  User.create!(name: 'Operator', email: 'operator@empresa.com', password: 'password123', role: :operator),
   User.create!(name: 'Laura Díaz', email: 'laura.diaz@empresa.com', password: 'password123', role: :operator),
   User.create!(name: 'Pedro Sánchez', email: 'pedro.sanchez@empresa.com', password: 'password123', role: :operator),
   User.create!(name: 'Carmen López', email: 'carmen.lopez@empresa.com', password: 'password123', role: :operator),

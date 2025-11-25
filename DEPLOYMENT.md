@@ -104,7 +104,7 @@ docker-compose exec web bundle exec rspec
 # Ver estado de servicios
 docker-compose ps
 
-# Reconstruir imágenes (si cambias Gemfile)
+# Reconstruir imágenes (si cambias Gemfile o archivos del proyecto)
 docker-compose build
 docker-compose up -d
 ```
@@ -118,7 +118,10 @@ curl http://localhost:3001/up
 # Login test
 curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"carlos.rodriguez@empresa.com","password":"password123"}'
+  -d '{"email":"admin@empresa.com","password":"password123"}'
+
+# API Documentation (Swagger UI)
+open http://localhost:3001/api-docs/index.html
 ```
 
 #### Servicios Incluidos
@@ -257,7 +260,7 @@ curl http://localhost:3000/up
 # Login test
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"carlos.rodriguez@empresa.com","password":"password123"}'
+  -d '{"email":"admin@empresa.com","password":"password123"}'
 ```
 
 ---
@@ -315,7 +318,7 @@ El sistema incluye seeds con datos realistas distribuidos en 4 semanas:
 #### Admin
 
 ```
-Email: carlos.rodriguez@empresa.com
+Email: admin@empresa.com
 Password: password123
 ```
 
@@ -327,24 +330,24 @@ Password: password123
 #### Production Manager
 
 ```
-Email: roberto.silva@empresa.com
+Email: manager@empresa.com
 Password: password123
 ```
 
 ```
-Email: patricia.moreno@empresa.com
+Email: ana.martinez@empresa.com
 Password: password123
 ```
 
 #### Operator
 
 ```
-Email: miguel.torres@empresa.com
+Email: operator@empresa.com
 Password: password123
 ```
 
 ```
-Email: ana.lopez@empresa.com
+Email: laura.diaz@empresa.com
 Password: password123
 ```
 
@@ -450,7 +453,7 @@ Ver [API.md](API.md) para documentación detallada de todos los endpoints.
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "carlos.rodriguez@empresa.com",
+    "email": "admin@empresa.com",
     "password": "password123"
   }'
 

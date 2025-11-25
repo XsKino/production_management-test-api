@@ -1,34 +1,45 @@
 openapi: 3.1.0
 info:
-  title: Kiuey Test API - Production Orders Management
+  title: Production Orders Management System
   description: |
-    Sistema completo de gestión de órdenes de producción con autenticación JWT,
-    autorización por roles (Pundit), background jobs (Sidekiq), y optimizaciones de performance.
+    A comprehensive production order management system built with Ruby on Rails, featuring
+    role-based access control, real-time task tracking, and automated notifications.
 
-    ## Características
-    - 🔐 Autenticación JWT con refresh tokens
-    - 👥 3 roles: admin, production_manager, operator
-    - 📦 Órdenes de producción (Normal y Urgente)
-    - ✅ Gestión de tareas
-    - 📊 Reportes y estadísticas
-    - 🔍 Búsqueda avanzada con Ransack
-    - 📄 Paginación con Kaminari
-    - ⚡ Cache con Redis
-    - 🔄 Background jobs con Sidekiq
-
-    ## Usuarios de Prueba
+    ## Test Users
 
     ### Admin
-    - Email: `carlos.rodriguez@empresa.com`
+    - Email: `admin@empresa.com`
     - Password: `password123`
+    - **Permissions**: Full system access, user management, all CRUD operations
 
     ### Production Manager
-    - Email: `roberto.silva@empresa.com`
+    - Email: `manager@empresa.com`
     - Password: `password123`
+    - **Permissions**: Manage assigned orders, view reports, assign operators
 
     ### Operator
-    - Email: `miguel.torres@empresa.com`
+    - Email: `operator@empresa.com`
     - Password: `password123`
+    - **Permissions**: View and complete assigned tasks, update task status
+
+    ## Test Data
+
+    The API includes comprehensive seed data for testing:
+    - **15 users** (2 admins, 5 managers, 8 operators)
+    - **74+ production orders** (56 normal, 18 urgent)
+    - **323+ tasks** distributed across orders
+    - **836+ audit logs** tracking all changes
+    - Data spans 4 weeks with realistic distribution
+
+    ## Technical Stack
+
+    - **Framework**: Ruby on Rails 8.1.1
+    - **Database**: MySQL 8.0
+    - **Cache & Jobs**: Redis + Sidekiq
+    - **Authentication**: JWT
+    - **Authorization**: Pundit
+    - **Testing**: RSpec (269 tests, 0 failures)
+    - **Deployment**: Docker Compose ready
 
   version: 1.0.0
   contact:
@@ -81,7 +92,7 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: carlos.rodriguez@empresa.com
+                  example: admin@empresa.com
                 password:
                   type: string
                   format: password
@@ -958,7 +969,7 @@ components:
         email:
           type: string
           format: email
-          example: carlos.rodriguez@empresa.com
+          example: admin@empresa.com
         name:
           type: string
           example: Carlos Rodríguez
