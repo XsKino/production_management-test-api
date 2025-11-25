@@ -49,10 +49,12 @@ info:
     name: MIT
 
 servers:
+  - url: https://kiuey-test-api.up.railway.app/api/v1
+    description: Railways Server (default)
   - url: http://localhost:3001/api/v1
-    description: Docker server (default)
+    description: Local Docker server
   - url: http://localhost:3000/api/v1
-    description: Local server
+    description: Local server (Rails server)
 
 tags:
   - name: Authentication
