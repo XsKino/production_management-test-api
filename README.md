@@ -130,7 +130,7 @@ docker-compose up -d
 # 3. Esperar a que los servicios estén listos (~30 segundos)
 docker-compose logs -f web
 
-# Cuando veas "Listening on http://0.0.0.0:3000", la API está lista
+# Cuando veas "Listening on http://0.0.0.0:3001", la API está lista
 ```
 
 **API disponible en**: `http://localhost:3001`
