@@ -1152,11 +1152,6 @@ components:
               type: string
               format: date
               description: Required for UrgentOrder type
-            user_ids:
-              type: array
-              items:
-                type: integer
-              description: Array of user IDs to assign to this order
             tasks_attributes:
               type: array
               items:
@@ -1172,6 +1167,12 @@ components:
                     type: string
                     format: date
                     example: "2024-02-15"
+        user_ids:
+          type: array
+          items:
+            type: integer
+          example: [16, 17]
+          description: Array of user IDs to assign to this order
 
     ProductionOrderUpdate:
       type: object
@@ -1191,10 +1192,12 @@ components:
             status:
               type: string
               enum: [pending, completed, cancelled]
-            user_ids:
-              type: array
-              items:
-                type: integer
+        user_ids:
+          type: array
+          items:
+            type: integer
+          example: [16, 17]
+          description: Array of user IDs to assign to this order
 
     # ==========================================
     # TASK SCHEMAS
