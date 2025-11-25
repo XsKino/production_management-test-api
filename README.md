@@ -21,6 +21,7 @@ Sistema de gestión de órdenes de producción con autenticación JWT, autorizac
 ## Demo en Vivo
 
 **API Base URL**: https://kiuey-test-api.up.railway.app/api/v1
+
 **API Documentation (Swagger)**: https://kiuey-test-api.up.railway.app/api-docs
 
 La API está desplegada en Railway y puede probarse directamente usando los links de arriba.
@@ -134,20 +135,23 @@ docker-compose logs -f web
 
 **API disponible en**: `http://localhost:3001`
 
+### Usar Base de datos vacía
+
+Si se desea testear con una database vacía hay que ignorar el comando de abajo que ejecuta los seeders,
+en su lugar, habrá que crear un usuario con rol :admin desde rails console
+Para poder hacer login con ese usuario y crear más usuarios con otros roles
+Además de gestionar el resto de recursos de la API
+
+```bash
+docker-compose exec web bundle exec rails console
+>>> User.create!({name: "Admin", email: "admin@empresa.com", password: :admin})
+```
+
 #### Cargar Datos de Prueba
 
 ```bash
 # Ejecutar seeds para crear usuarios, órdenes y tareas
 docker-compose exec web bundle exec rails db:seed
-```
-
-```bash
-# Si se desea testear con una database vacía hay que ignorar el comando de arriba,
-# en cuyo caso, habrá que crear un usuario con rol :admin desde rails console
-# Para poder hacer login con ese usuario y crear más usuarios con otros roles
-# Además de gestionar el resto de recursos de la API
-docker-compose exec web bundle exec rails console
->>> User.create!({name: "Admin", email: "admin@empresa.com", password: :admin})
 ```
 
 Esto creará:
