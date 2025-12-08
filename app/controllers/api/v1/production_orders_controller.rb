@@ -45,63 +45,49 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
     authorize @production_order
 
-    if @production_order.save
-      # Assign users if provided
-      assign_users if order_assignment_params[:user_ids].present?
+    @production_order.save!
 
-      # Invalidate monthly statistics cache
-      invalidate_monthly_statistics_cache
+    # Assign users if provided
+    assign_users if order_assignment_params[:user_ids].present?
 
-      render_success(
-        serialize_order_with_tasks(@production_order),
-        'Production order created successfully',
-        :created
-      )
-    else
-      render_error(
-        'Failed to create production order',
-        :unprocessable_content,
-        @production_order.errors.full_messages
-      )
-    end
+    # Invalidate monthly statistics cache
+    invalidate_monthly_statistics_cache
+
+    render_success(
+      serialize_order_with_tasks(@production_order),
+      'Production order created successfully',
+      :created
+    )
   end
 
   # PATCH/PUT /api/v1/production_orders/:id
   def update
     authorize @production_order
 
-    if @production_order.update(production_order_params)
-      # Update assignments if provided
-      update_assignments if order_assignment_params[:user_ids]
+    @production_order.update!(production_order_params)
 
-      # Invalidate monthly statistics cache
-      invalidate_monthly_statistics_cache
+    # Update assignments if provided
+    update_assignments if order_assignment_params[:user_ids]
 
-      render_success(
-        serialize_order_with_tasks(@production_order),
-        'Production order updated successfully'
-      )
-    else
-      render_error(
-        'Failed to update production order',
-        :unprocessable_content,
-        @production_order.errors.full_messages
-      )
-    end
+    # Invalidate monthly statistics cache
+    invalidate_monthly_statistics_cache
+
+    render_success(
+      serialize_order_with_tasks(@production_order),
+      'Production order updated successfully'
+    )
   end
 
   # DELETE /api/v1/production_orders/:id
   def destroy
     authorize @production_order
 
-    if @production_order.destroy
-      # Invalidate monthly statistics cache
-      invalidate_monthly_statistics_cache
+    @production_order.destroy!
 
-      render_success(nil, 'Production order deleted successfully')
-    else
-      render_error('Failed to delete production order')
-    end
+    # Invalidate monthly statistics cache
+    invalidate_monthly_statistics_cache
+
+    render_success(nil, 'Production order deleted successfully')
   end
 
   # GET /api/v1/production_orders/:id/tasks_summary

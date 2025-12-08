@@ -34,19 +34,13 @@ class Api::V1::UsersController < Api::V1::ApplicationController
     @user = User.new(user_params)
     authorize @user
 
-    if @user.save
-      render_success(
-        serialize_user(@user),
-        'User created successfully',
-        :created
-      )
-    else
-      render_error(
-        'Failed to create user',
-        :unprocessable_content,
-        @user.errors.full_messages
-      )
-    end
+    @user.save!
+
+    render_success(
+      serialize_user(@user),
+      'User created successfully',
+      :created
+    )
   end
 
   # PATCH/PUT /api/v1/users/:id
@@ -56,18 +50,12 @@ class Api::V1::UsersController < Api::V1::ApplicationController
     # Users can update their own profile (limited fields), admins can update any user
     update_params = current_user.admin? ? user_params : user_self_update_params
 
-    if @user.update(update_params)
-      render_success(
-        serialize_user(@user),
-        'User updated successfully'
-      )
-    else
-      render_error(
-        'Failed to update user',
-        :unprocessable_content,
-        @user.errors.full_messages
-      )
-    end
+    @user.update!(update_params)
+
+    render_success(
+      serialize_user(@user),
+      'User updated successfully'
+    )
   end
 
   # DELETE /api/v1/users/:id
@@ -79,11 +67,9 @@ class Api::V1::UsersController < Api::V1::ApplicationController
       return render_error('You cannot delete your own account', :forbidden)
     end
 
-    if @user.destroy
-      render_success(nil, 'User deleted successfully')
-    else
-      render_error('Failed to delete user')
-    end
+    @user.destroy!
+
+    render_success(nil, 'User deleted successfully')
   end
 
   private

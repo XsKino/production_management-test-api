@@ -7,84 +7,58 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     @task = @production_order.tasks.build(task_params)
     authorize @task
 
-    if @task.save
-      render_success(
-        serialize_task(@task),
-        'Task created successfully',
-        :created
-      )
-    else
-      render_error(
-        'Failed to create task',
-        :unprocessable_content,
-        @task.errors.full_messages
-      )
-    end
+    @task.save!
+
+    render_success(
+      serialize_task(@task),
+      'Task created successfully',
+      :created
+    )
   end
 
   # PATCH/PUT /api/v1/production_orders/:production_order_id/tasks/:id
   def update
     authorize @task
 
-    if @task.update(task_params)
-      render_success(
-        serialize_task(@task),
-        'Task updated successfully'
-      )
-    else
-      render_error(
-        'Failed to update task',
-        :unprocessable_content,
-        @task.errors.full_messages
-      )
-    end
+    @task.update!(task_params)
+
+    render_success(
+      serialize_task(@task),
+      'Task updated successfully'
+    )
   end
 
   # DELETE /api/v1/production_orders/:production_order_id/tasks/:id
   def destroy
     authorize @task
 
-    if @task.destroy
-      render_success(nil, 'Task deleted successfully')
-    else
-      render_error('Failed to delete task')
-    end
+    @task.destroy!
+
+    render_success(nil, 'Task deleted successfully')
   end
 
   # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/complete
   def complete
     authorize @task, :complete?
 
-    if @task.update(status: :completed)
-      render_success(
-        serialize_task(@task),
-        'Task marked as completed'
-      )
-    else
-      render_error(
-        'Failed to complete task',
-        :unprocessable_content,
-        @task.errors.full_messages
-      )
-    end
+    @task.update!(status: :completed)
+
+    render_success(
+      serialize_task(@task),
+      'Task marked as completed'
+    )
   end
 
   # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/reopen
   def reopen
     authorize @task, :reopen?
 
-    if @task.update(status: :pending)
-      render_success(
-        serialize_task(@task),
-        'Task reopened'
-      )
-    else
-      render_error(
-        'Failed to reopen task',
-        :unprocessable_content,
-        @task.errors.full_messages
-      )
-    end
+    @task.update!(status: :pending)
+
+    render_success(
+      serialize_task(@task),
+      'Task reopened'
+    )
   end
 
   private

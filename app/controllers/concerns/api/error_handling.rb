@@ -25,6 +25,24 @@ module Api
         )
       end
 
+      rescue_from ActiveRecord::RecordNotDestroyed do |exception|
+        render_error_response(
+          message: 'Failed to destroy the record',
+          status: :unprocessable_content,
+          code: 'RECORD_NOT_DESTROYED',
+          errors: exception.record.errors.full_messages
+        )
+      end
+
+      rescue_from ActiveRecord::RecordNotSaved do |exception|
+        render_error_response(
+          message: 'Failed to save the record',
+          status: :unprocessable_content,
+          code: 'RECORD_NOT_SAVED',
+          errors: exception.record.errors.full_messages
+        )
+      end
+
       rescue_from ActionController::ParameterMissing do |exception|
         render_error_response(
           message: "Required parameter missing: #{exception.param}",
@@ -33,6 +51,7 @@ module Api
           details: exception.message
         )
       end
+      
 
       rescue_from Pundit::NotAuthorizedError do |exception|
         render_error_response(
