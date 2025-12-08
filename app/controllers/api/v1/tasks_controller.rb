@@ -2,11 +2,12 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   before_action :set_production_order
   before_action :set_task, only: [:update, :destroy, :complete, :reopen]
 
+  # This callback replaces all manual `authorize` calls
+  before_action :authorize_resource
+
   # POST /api/v1/production_orders/:production_order_id/tasks
   def create
     @task = @production_order.tasks.build(task_params)
-    authorize @task
-
     @task.save!
 
     render_success(
@@ -18,8 +19,6 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:production_order_id/tasks/:id
   def update
-    authorize @task
-
     @task.update!(task_params)
 
     render_success(
@@ -30,8 +29,6 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # DELETE /api/v1/production_orders/:production_order_id/tasks/:id
   def destroy
-    authorize @task
-
     @task.destroy!
 
     render_success(nil, 'Task deleted successfully')
@@ -39,8 +36,6 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/complete
   def complete
-    authorize @task, :complete?
-
     @task.update!(status: :completed)
 
     render_success(
@@ -51,8 +46,6 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH /api/v1/production_orders/:production_order_id/tasks/:id/reopen
   def reopen
-    authorize @task, :reopen?
-
     @task.update!(status: :pending)
 
     render_success(
@@ -68,7 +61,21 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   end
 
   def set_task
+    # Clean: only fetches the record
     @task = @production_order.tasks.find(params[:id])
+  end
+
+  def authorize_resource
+    # Determine the rule based on action name
+    policy_name = "#{action_name}?"
+
+    if @task
+      # Instance validation (update, destroy, complete, reopen)
+      authorize @task, policy_name
+    else
+      # Validation for create: authorize the new task
+      authorize @task || Task, policy_name
+    end
   end
 
   def task_params

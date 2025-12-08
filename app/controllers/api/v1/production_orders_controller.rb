@@ -1,13 +1,15 @@
 class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
-  before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary, :audit_logs]
+  # Important order: First fetch, then authorize
   before_action :set_order_type, only: [:index, :create]
+  before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary, :audit_logs]
+
+  # This callback replaces all manual `authorize` calls
+  before_action :authorize_resource, except: [:create]
 
   # GET /api/v1/production_orders
   # GET /api/v1/normal_orders
   # GET /api/v1/urgent_orders
   def index
-    authorize ProductionOrder
-
     # Apply Pundit scope
     @orders = policy_scope(ProductionOrder)
 
@@ -31,7 +33,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id
   def show
-    authorize @production_order
     render_success(serialize_order_with_tasks(@production_order))
   end
 
@@ -43,6 +44,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     @production_order = order_class.new(production_order_params)
     @production_order.creator = current_user
 
+    # Manual authorization: need to authorize the instance with user-provided data before saving
     authorize @production_order
 
     @production_order.save!
@@ -62,8 +64,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:id
   def update
-    authorize @production_order
-
     @production_order.update!(production_order_params)
 
     # Update assignments if provided
@@ -80,8 +80,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # DELETE /api/v1/production_orders/:id
   def destroy
-    authorize @production_order
-
     @production_order.destroy!
 
     # Invalidate monthly statistics cache
@@ -92,8 +90,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id/tasks_summary
   def tasks_summary
-    authorize @production_order, :tasks_summary?
-
     summary = {
       order: serialize_order(@production_order),
       tasks_summary: {
@@ -112,8 +108,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id/audit_logs
   def audit_logs
-    authorize @production_order, :show?
-
     @audit_logs = @production_order.audit_logs
                                    .includes(:user)
                                    .recent
@@ -131,8 +125,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/monthly_statistics
   def monthly_statistics
-    authorize ProductionOrder, :monthly_statistics?
-
     current_month_start = Date.current.beginning_of_month
     current_month_end = Date.current.end_of_month
 
@@ -167,14 +159,12 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/urgent_orders_report
   def urgent_orders_report
-    authorize ProductionOrder, :urgent_orders_report?
-
-    # Guardamos los estados en variables para interpolar limpio
+    # Store statuses in variables for clean interpolation
     pending_status = Task.statuses[:pending]
     completed_status = Task.statuses[:completed]
 
-    # Definimos el Lateral Join
-    # Busca la última tarea pendiente específica para la orden actual
+    # Define Lateral Join
+    # Fetches the latest pending task specific to the current order
     lateral_join_sql = <<~SQL
       LEFT JOIN LATERAL (
         SELECT
@@ -192,15 +182,15 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
       ) AS latest_task ON true
     SQL
 
-    # Construimos la Query
+    # Build the Query
     urgent_orders_with_stats = policy_scope(ProductionOrder)
-      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id") # Join 1: Para contar estadísticas globales
-      .joins(lateral_join_sql) # Join 2: Para traer los campos específicos de la última tarea
+      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id") # Join 1: To count global statistics
+      .joins(lateral_join_sql) # Join 2: To fetch specific fields of the latest task
       .where(type: 'UrgentOrder')
       .select(
         "production_orders.*",
 
-        # Campos de la última tarea pendiente (usamos ANY_VALUE para evitar errores de GROUP BY)
+        # Latest pending task fields (use ANY_VALUE to avoid GROUP BY errors)
         "ANY_VALUE(latest_task.id) as latest_pending_task_id",
         "ANY_VALUE(latest_task.description) as latest_pending_task_description",
         "ANY_VALUE(latest_task.expected_end_date) as latest_pending_task_expected_end_date",
@@ -208,7 +198,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
         "ANY_VALUE(latest_task.created_at) as latest_pending_task_created_at",
         "ANY_VALUE(latest_task.updated_at) as latest_pending_task_updated_at",
 
-        # Estadísticas Agregadas (usando la tabla 'tasks' del primer join)
+        # Aggregated Statistics (using 'tasks' table from first join)
         "COUNT(CASE WHEN tasks.status = #{pending_status} THEN 1 END) as pending_tasks_count",
         "COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) as completed_tasks_count",
         "COUNT(tasks.id) as total_tasks_count",
@@ -275,8 +265,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/urgent_with_expired_tasks
   def urgent_with_expired_tasks
-    authorize ProductionOrder, :urgent_with_expired_tasks?
-
     # Find urgent orders with at least one pending task that's overdue
     urgent_orders_with_expired = policy_scope(ProductionOrder)
       .joins(:tasks)
@@ -310,7 +298,26 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   private
 
   def set_production_order
+    # Clean: only fetches the record
     @production_order = policy_scope(ProductionOrder).find(params[:id])
+  end
+
+  def authorize_resource
+    # Define exceptions where action name doesn't match the policy name
+    policy_mapping = {
+      audit_logs: :show # audit_logs validates against show? rule
+    }
+
+    # Determine the rule: either from the map, or the action name
+    policy_name = "#{policy_mapping[action_name.to_sym] || action_name}?"
+
+    if @production_order
+      # Instance validation (show, update, destroy, tasks_summary, audit_logs)
+      authorize @production_order, policy_name
+    else
+      # Class validation (index, monthly_statistics, reports)
+      authorize ProductionOrder, policy_name
+    end
   end
 
   def set_order_type

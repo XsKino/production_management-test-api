@@ -72,3 +72,65 @@ Registro de mejoras técnicas implementadas en el proyecto.
 - Tests: All passing
 
 ---
+
+## 3. Centralizar Autorización en Callbacks
+
+### Cambios
+
+- Creado método `authorize_resource` que centraliza toda la lógica de autorización
+- Implementado patrón de convención sobre configuración (acción → policy automática)
+- Separada responsabilidad: `set_*` solo busca, `authorize_resource` solo autoriza
+- Eliminadas ~15 llamadas manuales a `authorize` en 3 controladores
+
+### Archivos modificados
+
+- `app/controllers/api/v1/production_orders_controller.rb`
+- `app/controllers/api/v1/tasks_controller.rb`
+- `app/controllers/api/v1/users_controller.rb`
+
+### Detalles técnicos
+
+**Antes (código repetitivo):**
+```ruby
+def show
+  authorize @production_order  # Repetido en cada acción
+  render_success(...)
+end
+```
+
+**Después (DRY con callback):**
+```ruby
+before_action :authorize_resource, except: [:create]
+
+def authorize_resource
+  policy_mapping = { audit_logs: :show }  # Excepciones
+  policy_name = "#{policy_mapping[action_name.to_sym] || action_name}?"
+
+  if @production_order
+    authorize @production_order, policy_name
+  else
+    authorize ProductionOrder, policy_name
+  end
+end
+
+def show
+  # Authorize implicito via callback
+  render_success(...)
+end
+```
+
+### Beneficios
+
+- **DRY**: ~15 líneas de `authorize` eliminadas
+- **Seguridad por defecto**: Nuevos endpoints fallan si no tienen policy definida
+- **Convención sobre configuración**: `tasks_summary` automáticamente usa `tasks_summary?`
+- **Single Responsibility**: `set_*` solo busca, `authorize_resource` solo autoriza
+- **Flexibilidad**: `policy_mapping` maneja casos especiales limpiamente
+
+### Impacto
+
+- Código más limpio y mantenible
+- Menor probabilidad de olvidar autorización (agujero de seguridad)
+- Tests: 269 examples, 0 failures
+
+---

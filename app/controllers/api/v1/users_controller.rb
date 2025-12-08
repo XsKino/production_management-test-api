@@ -1,10 +1,11 @@
 class Api::V1::UsersController < Api::V1::ApplicationController
   before_action :set_user, only: [:show, :update, :destroy]
 
+  # This callback replaces all manual `authorize` calls
+  before_action :authorize_resource, except: [:create]
+
   # GET /api/v1/users
   def index
-    authorize User
-
     @users = policy_scope(User)
 
     # Apply basic filtering if needed
@@ -24,14 +25,13 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # GET /api/v1/users/:id
   def show
-    authorize @user
-
     render_success(serialize_user_detail(@user))
   end
 
   # POST /api/v1/users
   def create
     @user = User.new(user_params)
+    # Manual authorization: need to authorize the instance with user-provided data before saving
     authorize @user
 
     @user.save!
@@ -45,8 +45,6 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/users/:id
   def update
-    authorize @user
-
     # Users can update their own profile (limited fields), admins can update any user
     update_params = current_user.admin? ? user_params : user_self_update_params
 
@@ -60,8 +58,6 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # DELETE /api/v1/users/:id
   def destroy
-    authorize @user
-
     # Prevent admin from deleting themselves
     if @user == current_user
       return render_error('You cannot delete your own account', :forbidden)
@@ -75,7 +71,21 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   private
 
   def set_user
+    # Clean: only fetches the record
     @user = User.find(params[:id])
+  end
+
+  def authorize_resource
+    # Determine the rule based on action name
+    policy_name = "#{action_name}?"
+
+    if @user
+      # Instance validation (show, update, destroy)
+      authorize @user, policy_name
+    else
+      # Class validation (index)
+      authorize User, policy_name
+    end
   end
 
   def user_params
