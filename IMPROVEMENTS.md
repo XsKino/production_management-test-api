@@ -73,37 +73,54 @@ Registro de mejoras técnicas implementadas en el proyecto.
 
 ---
 
-## 3. Centralizar Autorización en Callbacks
+## 3. Centralizar Autorización con Callbacks y DRY
 
 ### Cambios
 
-- Creado método `authorize_resource` que centraliza toda la lógica de autorización
+**Fase 1: Autorización en Callbacks (por controlador)**
+- Creado método `authorize_resource` en cada controlador
 - Implementado patrón de convención sobre configuración (acción → policy automática)
 - Separada responsabilidad: `set_*` solo busca, `authorize_resource` solo autoriza
 - Eliminadas ~15 llamadas manuales a `authorize` en 3 controladores
 
+**Fase 2: DRY - Centralización en ApplicationController**
+- Movido método `authorize_resource` desde 3 controladores a `Api::V1::ApplicationController`
+- Implementado usando convención genérica: `controller_name.singularize` → variable de instancia
+- Eliminados ~45 líneas adicionales de código repetitivo (3 métodos completos)
+- Usado constante `POLICY_MAPPING` para excepciones en lugar de variables locales
+
 ### Archivos modificados
 
-- `app/controllers/api/v1/production_orders_controller.rb`
-- `app/controllers/api/v1/tasks_controller.rb`
-- `app/controllers/api/v1/users_controller.rb`
+- `app/controllers/api/v1/application_controller.rb` (agregado método genérico)
+- `app/controllers/api/v1/production_orders_controller.rb` (agregada constante POLICY_MAPPING)
+- `app/controllers/api/v1/tasks_controller.rb` (usa método del padre directamente)
+- `app/controllers/api/v1/users_controller.rb` (usa método del padre directamente)
 
 ### Detalles técnicos
 
-**Antes (código repetitivo):**
+**Antes (Fase 0 - código original con llamadas manuales):**
 ```ruby
+# Repetido en cada acción de cada controlador
 def show
-  authorize @production_order  # Repetido en cada acción
+  authorize @production_order  # Manual en CADA acción
   render_success(...)
 end
+
+def update
+  authorize @production_order  # Manual en CADA acción
+  @production_order.update!(...)
+  render_success(...)
+end
+# ... y así en ~15 acciones más
 ```
 
-**Después (DRY con callback):**
+**Fase 1 (Callbacks en cada controlador - todavía repetitivo):**
 ```ruby
+# En ProductionOrdersController
 before_action :authorize_resource, except: [:create]
 
 def authorize_resource
-  policy_mapping = { audit_logs: :show }  # Excepciones
+  policy_mapping = { audit_logs: :show }
   policy_name = "#{policy_mapping[action_name.to_sym] || action_name}?"
 
   if @production_order
@@ -113,24 +130,95 @@ def authorize_resource
   end
 end
 
-def show
-  # Authorize implicito via callback
-  render_success(...)
+# En TasksController (casi idéntico - DUPLICACIÓN)
+def authorize_resource
+  policy_name = "#{action_name}?"
+
+  if @task
+    authorize @task, policy_name
+  else
+    authorize @task || Task, policy_name
+  end
+end
+
+# En UsersController (casi idéntico - DUPLICACIÓN)
+def authorize_resource
+  policy_name = "#{action_name}?"
+
+  if @user
+    authorize @user, policy_name
+  else
+    authorize User, policy_name
+  end
 end
 ```
 
+**Fase 2 (Máximo DRY - método genérico en ApplicationController):**
+```ruby
+# En Api::V1::ApplicationController (UN SOLO LUGAR)
+def authorize_resource
+  # 1. Determine resource based on controller name
+  resource = instance_variable_get("@#{controller_name.singularize}")
+
+  # 2. Get policy mapping from child controller if defined
+  policy_mapping = defined?(self.class::POLICY_MAPPING) ? self.class::POLICY_MAPPING : {}
+
+  # 3. Determine policy rule name
+  policy_action = policy_mapping[action_name.to_sym] || action_name
+  policy_name = "#{policy_action}?"
+
+  if resource
+    authorize resource, policy_name
+  else
+    resource_class = controller_name.singularize.classify.constantize
+    authorize resource_class, policy_name
+  end
+end
+
+# En ProductionOrdersController (solo constante cuando hay excepciones)
+POLICY_MAPPING = {
+  audit_logs: :show
+}.freeze
+
+before_action :authorize_resource, except: [:create]
+
+# En TasksController y UsersController: NADA
+# Solo declaran el before_action, heredan el método del padre
+before_action :authorize_resource, except: [:create]
+```
+
+### Evolución del código
+
+| Fase | Descripción | Líneas eliminadas | Ubicación de la lógica |
+|------|-------------|-------------------|------------------------|
+| 0 | Llamadas manuales | - | ~15 acciones (disperso) |
+| 1 | Callbacks por controlador | ~15 | 3 controladores (repetitivo) |
+| 2 | Método genérico en ApplicationController | ~45 adicionales | 1 lugar (ApplicationController) |
+| **Total** | **Mejora completa** | **~60 líneas** | **Centralizado y DRY** |
+
 ### Beneficios
 
-- **DRY**: ~15 líneas de `authorize` eliminadas
-- **Seguridad por defecto**: Nuevos endpoints fallan si no tienen policy definida
-- **Convención sobre configuración**: `tasks_summary` automáticamente usa `tasks_summary?`
-- **Single Responsibility**: `set_*` solo busca, `authorize_resource` solo autoriza
-- **Flexibilidad**: `policy_mapping` maneja casos especiales limpiamente
+**De la Fase 1 (Callbacks):**
+- ✅ **DRY en acciones**: ~15 líneas de `authorize` eliminadas
+- ✅ **Seguridad por defecto**: Nuevos endpoints fallan si no tienen policy
+- ✅ **Convención sobre configuración**: `tasks_summary` automáticamente usa `tasks_summary?`
+- ✅ **Single Responsibility**: `set_*` solo busca, `authorize_resource` solo autoriza
+- ✅ **Flexibilidad**: `policy_mapping` maneja casos especiales
+
+**De la Fase 2 (DRY en ApplicationController):**
+- ✅ **Máximo DRY**: ~45 líneas adicionales eliminadas (3 métodos idénticos)
+- ✅ **Convención genérica**: Usa `controller_name` para determinar automáticamente el recurso
+- ✅ **POLICY_MAPPING como constante**: Mejor práctica vs. variable local
+- ✅ **Mantenibilidad**: Un solo lugar para actualizar la lógica de autorización
+- ✅ **Extensibilidad**: Nuevos controladores heredan automáticamente esta funcionalidad
 
 ### Impacto
 
-- Código más limpio y mantenible
+- **~60 líneas de código eliminadas** en total
+- Código más limpio, mantenible y DRY
 - Menor probabilidad de olvidar autorización (agujero de seguridad)
+- Lógica de autorización centralizada en un solo lugar
+- Más fácil agregar nuevos controladores (heredan automáticamente)
 - Tests: 269 examples, 0 failures
 
 ---

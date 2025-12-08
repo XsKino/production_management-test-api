@@ -1,7 +1,7 @@
 class Api::V1::UsersController < Api::V1::ApplicationController
   before_action :set_user, only: [:show, :update, :destroy]
 
-  # This callback replaces all manual `authorize` calls
+  # This callback uses the generic authorize_resource from ApplicationController
   before_action :authorize_resource, except: [:create]
 
   # GET /api/v1/users
@@ -73,19 +73,6 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   def set_user
     # Clean: only fetches the record
     @user = User.find(params[:id])
-  end
-
-  def authorize_resource
-    # Determine the rule based on action name
-    policy_name = "#{action_name}?"
-
-    if @user
-      # Instance validation (show, update, destroy)
-      authorize @user, policy_name
-    else
-      # Class validation (index)
-      authorize User, policy_name
-    end
   end
 
   def user_params

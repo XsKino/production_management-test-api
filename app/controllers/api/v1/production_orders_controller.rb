@@ -1,9 +1,14 @@
 class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
+  # Define exceptions where action name doesn't match the policy name
+  POLICY_MAPPING = {
+    audit_logs: :show # audit_logs validates against show? rule
+  }.freeze
+
   # Important order: First fetch, then authorize
   before_action :set_order_type, only: [:index, :create]
   before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary, :audit_logs]
 
-  # This callback replaces all manual `authorize` calls
+  # This callback uses the generic authorize_resource from ApplicationController
   before_action :authorize_resource, except: [:create]
 
   # GET /api/v1/production_orders
@@ -300,24 +305,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   def set_production_order
     # Clean: only fetches the record
     @production_order = policy_scope(ProductionOrder).find(params[:id])
-  end
-
-  def authorize_resource
-    # Define exceptions where action name doesn't match the policy name
-    policy_mapping = {
-      audit_logs: :show # audit_logs validates against show? rule
-    }
-
-    # Determine the rule: either from the map, or the action name
-    policy_name = "#{policy_mapping[action_name.to_sym] || action_name}?"
-
-    if @production_order
-      # Instance validation (show, update, destroy, tasks_summary, audit_logs)
-      authorize @production_order, policy_name
-    else
-      # Class validation (index, monthly_statistics, reports)
-      authorize ProductionOrder, policy_name
-    end
   end
 
   def set_order_type

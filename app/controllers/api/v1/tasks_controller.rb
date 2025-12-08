@@ -2,12 +2,17 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   before_action :set_production_order
   before_action :set_task, only: [:update, :destroy, :complete, :reopen]
 
-  # This callback replaces all manual `authorize` calls
-  before_action :authorize_resource
+  # This callback uses the generic authorize_resource from ApplicationController
+  # Excluding 'create' because it needs manual authorization with @production_order context
+  before_action :authorize_resource, except: [:create]
 
   # POST /api/v1/production_orders/:production_order_id/tasks
   def create
     @task = @production_order.tasks.build(task_params)
+
+    # Manual authorization: TaskPolicy#create? may need @production_order context
+    authorize @task
+
     @task.save!
 
     render_success(
@@ -63,19 +68,6 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   def set_task
     # Clean: only fetches the record
     @task = @production_order.tasks.find(params[:id])
-  end
-
-  def authorize_resource
-    # Determine the rule based on action name
-    policy_name = "#{action_name}?"
-
-    if @task
-      # Instance validation (update, destroy, complete, reopen)
-      authorize @task, policy_name
-    else
-      # Validation for create: authorize the new task
-      authorize @task || Task, policy_name
-    end
   end
 
   def task_params

@@ -106,4 +106,35 @@ class Api::V1::ApplicationController < ActionController::API
       }
     }
   end
+
+  # Generic authorization callback for child controllers
+  # Uses convention over configuration: action_name → policy_name
+  # Child controllers can define POLICY_MAPPING constant for exceptions
+  def authorize_resource
+    # 1. Determine the resource instance variable based on controller name
+    # Example: UsersController → @user, ProductionOrdersController → @production_order
+    resource = instance_variable_get("@#{controller_name.singularize}")
+
+    # 2. Get policy mapping from child controller if defined, otherwise use empty hash
+    policy_mapping = defined?(self.class::POLICY_MAPPING) ? self.class::POLICY_MAPPING : {}
+
+    # 3. Determine the policy rule name
+    # Either from the mapping (for exceptions) or from the action name
+    policy_action = policy_mapping[action_name.to_sym] || action_name
+    policy_name = "#{policy_action}?"
+
+    if resource
+      # Instance authorization (when resource is already loaded)
+      authorize resource, policy_name
+    else
+      # Class authorization (when resource hasn't been loaded yet, e.g., index, create)
+      # Derive the model class from the controller name
+      resource_class = controller_name.singularize.classify.constantize
+      authorize resource_class, policy_name
+    end
+  rescue NameError => e
+    # Handle cases where controller name doesn't map to a valid model class
+    Rails.logger.error "Could not determine resource class for #{controller_name}: #{e.message}"
+    raise Pundit::NotAuthorizedError, "Cannot authorize resource for #{controller_name}"
+  end
 end
