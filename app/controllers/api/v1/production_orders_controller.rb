@@ -169,20 +169,53 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   def urgent_orders_report
     authorize ProductionOrder, :urgent_orders_report?
 
-    # Complex query for urgent orders with task statistics
+    # Guardamos los estados en variables para interpolar limpio
+    pending_status = Task.statuses[:pending]
+    completed_status = Task.statuses[:completed]
+
+    # Definimos el Lateral Join
+    # Busca la última tarea pendiente específica para la orden actual
+    lateral_join_sql = <<~SQL
+      LEFT JOIN LATERAL (
+        SELECT
+          id,
+          description,
+          expected_end_date,
+          status,
+          created_at,
+          updated_at
+        FROM tasks
+        WHERE tasks.production_order_id = production_orders.id
+          AND tasks.status = #{pending_status}
+        ORDER BY id DESC
+        LIMIT 1
+      ) AS latest_task ON true
+    SQL
+
+    # Construimos la Query
     urgent_orders_with_stats = policy_scope(ProductionOrder)
-      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id")
+      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id") # Join 1: Para contar estadísticas globales
+      .joins(lateral_join_sql) # Join 2: Para traer los campos específicos de la última tarea
       .where(type: 'UrgentOrder')
       .select(
         "production_orders.*",
-        "MAX(CASE WHEN tasks.status = #{Task.statuses[:pending]} THEN tasks.expected_end_date END) as latest_pending_task_date",
-        "COUNT(CASE WHEN tasks.status = #{Task.statuses[:pending]} THEN 1 END) as pending_tasks_count",
-        "COUNT(CASE WHEN tasks.status = #{Task.statuses[:completed]} THEN 1 END) as completed_tasks_count",
+
+        # Campos de la última tarea pendiente (usamos ANY_VALUE para evitar errores de GROUP BY)
+        "ANY_VALUE(latest_task.id) as latest_pending_task_id",
+        "ANY_VALUE(latest_task.description) as latest_pending_task_description",
+        "ANY_VALUE(latest_task.expected_end_date) as latest_pending_task_expected_end_date",
+        "ANY_VALUE(latest_task.status) as latest_pending_task_status",
+        "ANY_VALUE(latest_task.created_at) as latest_pending_task_created_at",
+        "ANY_VALUE(latest_task.updated_at) as latest_pending_task_updated_at",
+
+        # Estadísticas Agregadas (usando la tabla 'tasks' del primer join)
+        "COUNT(CASE WHEN tasks.status = #{pending_status} THEN 1 END) as pending_tasks_count",
+        "COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) as completed_tasks_count",
         "COUNT(tasks.id) as total_tasks_count",
-        "CASE 
-          WHEN COUNT(tasks.id) > 0 
-          THEN ROUND(COUNT(CASE WHEN tasks.status = #{Task.statuses[:completed]} THEN 1 END) * 100.0 / COUNT(tasks.id), 2)
-          ELSE 0 
+        "CASE
+           WHEN COUNT(tasks.id) > 0
+           THEN ROUND(COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) * 100.0 / COUNT(tasks.id), 2)
+           ELSE 0
          END as completion_percentage"
       )
       .group("production_orders.id")
@@ -193,6 +226,20 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     # Serialize manually without accessing tasks collection
     # since we have the counts from SQL aggregations
     serialized_orders = paginated_orders.map do |order|
+      # Build latest_pending_task object if it exists
+      latest_pending_task = if order.latest_pending_task_id.present?
+        {
+          id: order.latest_pending_task_id,
+          description: order.latest_pending_task_description,
+          expected_end_date: order.latest_pending_task_expected_end_date,
+          status: Task.statuses.key(order.latest_pending_task_status),
+          created_at: order.latest_pending_task_created_at,
+          updated_at: order.latest_pending_task_updated_at
+        }
+      else
+        nil
+      end
+
       {
         id: order.id,
         type: order.type,
@@ -209,7 +256,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
           email: order.creator.email
         },
         assigned_users: order.assigned_users.map { |u| { id: u.id, name: u.name, email: u.email } },
-        latest_pending_task_date: order.latest_pending_task_date,
+        latest_pending_task: latest_pending_task,
         pending_tasks_count: order.pending_tasks_count.to_i,
         completed_tasks_count: order.completed_tasks_count.to_i,
         total_tasks_count: order.total_tasks_count.to_i,
