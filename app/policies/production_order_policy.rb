@@ -62,6 +62,22 @@ class ProductionOrderPolicy < ApplicationPolicy
     user.present?
   end
 
+  # Permitted attributes for mass assignment
+  # Pundit allows different attributes based on the action
+  def permitted_attributes_for_create
+    base_attrs = [:start_date, :expected_end_date, :status,
+                 tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
+
+    # Add deadline for UrgentOrder
+    base_attrs << :deadline if record.is_a?(UrgentOrder)
+
+    base_attrs
+  end
+
+  def permitted_attributes_for_update
+    permitted_attributes_for_create
+  end
+
   private
 
   def admin?

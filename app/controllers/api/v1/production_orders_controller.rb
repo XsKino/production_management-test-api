@@ -72,7 +72,11 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
               NormalOrder # Default
             end
 
-    @production_order = klass.new(production_order_params)
+    # Build temporary instance to determine permitted attributes (needed for UrgentOrder check)
+    temp_order = klass.new
+    permitted_attrs = policy(temp_order).permitted_attributes_for_create
+
+    @production_order = klass.new(params.require(:production_order).permit(permitted_attrs))
     @production_order.creator = current_user
 
     # Manual authorization: need to authorize the instance with user-provided data before saving
@@ -106,7 +110,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:id
   def update
-    @production_order.update!(production_order_params)
+    permitted_attrs = policy(@production_order).permitted_attributes_for_update
+    @production_order.update!(params.require(:production_order).permit(permitted_attrs))
 
     # Update assignments if provided
     update_assignments if order_assignment_params[:user_ids]
@@ -351,21 +356,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   def set_production_order
     # Clean: only fetches the record
     @production_order = policy_scope(ProductionOrder).find(params[:id])
-  end
-
-  def production_order_params
-    permitted_params = [:start_date, :expected_end_date, :status,
-                       tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
-
-    # Add deadline for urgent orders (check if controller has order_class method and it's UrgentOrder)
-    if respond_to?(:order_class, true) && order_class == UrgentOrder
-      permitted_params << :deadline
-    elsif params.dig(:production_order, :type) == 'UrgentOrder'
-      # Also allow deadline if type is specified in params (for generic ProductionOrdersController)
-      permitted_params << :deadline
-    end
-
-    params.require(:production_order).permit(permitted_params)
   end
 
   def order_assignment_params

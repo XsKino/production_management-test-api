@@ -547,3 +547,146 @@ serialized.merge(statistics: { ... })
 - Tests: 269 examples, 0 failures
 
 ---
+## 6. Implementar Strong Params con Pundit
+
+### Cambios
+
+- Agregados métodos `permitted_attributes_for_create` y `permitted_attributes_for_update` en 3 policies
+- Eliminados 4 métodos de strong params de controladores
+- Toda la lógica de permisos ahora reside en las policies (responsabilidad única)
+
+### Archivos modificados
+
+- `app/policies/production_order_policy.rb` (agregados métodos permitted_attributes)
+- `app/policies/task_policy.rb` (agregados métodos permitted_attributes)
+- `app/policies/user_policy.rb` (agregados métodos permitted_attributes con lógica admin/non-admin)
+- `app/controllers/api/v1/production_orders_controller.rb` (eliminado `production_order_params`)
+- `app/controllers/api/v1/tasks_controller.rb` (eliminado `task_params`)
+- `app/controllers/api/v1/users_controller.rb` (eliminados `user_params` y `user_self_update_params`)
+
+### Detalles técnicos
+
+**Antes (strong params en controladores):**
+
+```ruby
+# En ProductionOrdersController (~14 líneas)
+def production_order_params
+  permitted_params = [:start_date, :expected_end_date, :status,
+                     tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
+
+  # Add deadline for urgent orders
+  if respond_to?(:order_class, true) && order_class == UrgentOrder
+    permitted_params << :deadline
+  elsif params.dig(:production_order, :type) == 'UrgentOrder'
+    permitted_params << :deadline
+  end
+
+  params.require(:production_order).permit(permitted_params)
+end
+
+# En TasksController (~3 líneas)
+def task_params
+  params.require(:task).permit(:description, :expected_end_date, :status)
+end
+
+# En UsersController (~8 líneas - DOS MÉTODOS)
+def user_params
+  params.require(:user).permit(:name, :email, :password, :password_confirmation, :role)
+end
+
+def user_self_update_params
+  params.require(:user).permit(:name, :email, :password, :password_confirmation)
+end
+
+# Uso en acciones
+def create
+  @production_order = klass.new(production_order_params)  # Controlador decide permisos
+  # ...
+end
+
+def update
+  update_params = current_user.admin? ? user_params : user_self_update_params  # Lógica duplicada
+  @user.update!(update_params)
+end
+```
+
+**Después (permisos delegados a policies):**
+
+```ruby
+# En ProductionOrderPolicy
+def permitted_attributes_for_create
+  base_attrs = [:start_date, :expected_end_date, :status,
+               tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
+
+  # Add deadline for UrgentOrder
+  base_attrs << :deadline if record.is_a?(UrgentOrder)
+
+  base_attrs
+end
+
+def permitted_attributes_for_update
+  permitted_attributes_for_create
+end
+
+# En TaskPolicy
+def permitted_attributes_for_create
+  [:description, :expected_end_date, :status]
+end
+
+def permitted_attributes_for_update
+  [:description, :expected_end_date, :status]
+end
+
+# En UserPolicy (con lógica de admin)
+def permitted_attributes_for_create
+  # Only admin can create users, so they get all fields
+  [:name, :email, :password, :password_confirmation, :role]
+end
+
+def permitted_attributes_for_update
+  if admin?
+    # Admin can update all fields
+    [:name, :email, :password, :password_confirmation, :role]
+  else
+    # Non-admin can only update their own profile (limited fields)
+    [:name, :email, :password, :password_confirmation]
+  end
+end
+
+# Uso en controladores (mucho más limpio)
+def create
+  temp_order = klass.new
+  permitted_attrs = policy(temp_order).permitted_attributes_for_create
+  @production_order = klass.new(params.require(:production_order).permit(permitted_attrs))
+  # ...
+end
+
+def update
+  permitted_attrs = policy(@user).permitted_attributes_for_update  # Policy decide permisos
+  @user.update!(params.require(:user).permit(permitted_attrs))
+end
+```
+
+### Beneficios
+
+- **Single Responsibility**: Policies ahora manejan TODA la autorización (tanto permisos como atributos permitidos)
+- **DRY**: Eliminada duplicación de lógica (ej. `user_params` vs `user_self_update_params`)
+- **Consistencia**: Mismo patrón en todos los controladores
+- **Seguridad mejorada**: Permisos centralizados en policies, no dispersos en controladores
+- **Más mantenible**: Cambios en permisos solo requieren editar la policy
+- **Lógica declarativa**: Los permisos están junto a las reglas de autorización
+
+### Características especiales
+
+1. **UrgentOrder detection**: Policy detecta automáticamente si `record.is_a?(UrgentOrder)` para permitir `:deadline`
+2. **Admin/non-admin logic**: `UserPolicy` usa lógica condicional para permitir `:role` solo a admins
+3. **Convención**: Métodos `permitted_attributes_for_create` y `permitted_attributes_for_update` siguen convención de Pundit
+
+### Impacto
+
+- **~25 líneas de código eliminadas** (4 métodos de strong params)
+- Código más limpio y organizado
+- Autorización completamente centralizada en policies
+- Tests: 269 examples, 0 failures
+
+---

@@ -8,7 +8,11 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # POST /api/v1/production_orders/:production_order_id/tasks
   def create
-    @task = @production_order.tasks.build(task_params)
+    # Build temporary task to get permitted attributes
+    temp_task = @production_order.tasks.build
+    permitted_attrs = policy(temp_task).permitted_attributes_for_create
+
+    @task = @production_order.tasks.build(params.require(:task).permit(permitted_attrs))
 
     # Manual authorization: TaskPolicy#create? may need @production_order context
     authorize @task
@@ -24,7 +28,8 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/production_orders/:production_order_id/tasks/:id
   def update
-    @task.update!(task_params)
+    permitted_attrs = policy(@task).permitted_attributes_for_update
+    @task.update!(params.require(:task).permit(permitted_attrs))
 
     render_success(
       serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? }),
@@ -68,9 +73,5 @@ class Api::V1::TasksController < Api::V1::ApplicationController
   def set_task
     # Clean: only fetches the record
     @task = @production_order.tasks.find(params[:id])
-  end
-
-  def task_params
-    params.require(:task).permit(:description, :expected_end_date, :status)
   end
 end

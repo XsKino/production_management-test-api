@@ -36,6 +36,22 @@ class UserPolicy < ApplicationPolicy
     admin?
   end
 
+  # Permitted attributes for mass assignment
+  def permitted_attributes_for_create
+    # Only admin can create users, so they get all fields
+    [:name, :email, :password, :password_confirmation, :role]
+  end
+
+  def permitted_attributes_for_update
+    if admin?
+      # Admin can update all fields
+      [:name, :email, :password, :password_confirmation, :role]
+    else
+      # Non-admin can only update their own profile (limited fields)
+      [:name, :email, :password, :password_confirmation]
+    end
+  end
+
   private
 
   def admin?

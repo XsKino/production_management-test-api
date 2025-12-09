@@ -55,6 +55,15 @@ class TaskPolicy < ApplicationPolicy
     admin? || assigned_to_order? || created_order?
   end
 
+  # Permitted attributes for mass assignment
+  def permitted_attributes_for_create
+    [:description, :expected_end_date, :status]
+  end
+
+  def permitted_attributes_for_update
+    [:description, :expected_end_date, :status]
+  end
+
   private
 
   def admin?

@@ -37,7 +37,11 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # POST /api/v1/users
   def create
-    @user = User.new(user_params)
+    # Build temporary user to get permitted attributes
+    temp_user = User.new
+    permitted_attrs = policy(temp_user).permitted_attributes_for_create
+
+    @user = User.new(params.require(:user).permit(permitted_attrs))
     # Manual authorization: need to authorize the instance with user-provided data before saving
     authorize @user
 
@@ -52,10 +56,9 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # PATCH/PUT /api/v1/users/:id
   def update
-    # Users can update their own profile (limited fields), admins can update any user
-    update_params = current_user.admin? ? user_params : user_self_update_params
-
-    @user.update!(update_params)
+    # Policy determines permitted attributes based on admin status
+    permitted_attrs = policy(@user).permitted_attributes_for_update
+    @user.update!(params.require(:user).permit(permitted_attrs))
 
     render_success(
       serialize(@user),
@@ -80,13 +83,5 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   def set_user
     # Clean: only fetches the record
     @user = User.find(params[:id])
-  end
-
-  def user_params
-    params.require(:user).permit(:name, :email, :password, :password_confirmation, :role)
-  end
-
-  def user_self_update_params
-    params.require(:user).permit(:name, :email, :password, :password_confirmation)
   end
 end
