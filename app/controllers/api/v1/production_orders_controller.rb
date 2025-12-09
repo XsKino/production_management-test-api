@@ -92,7 +92,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     end
 
     # Invalidate monthly statistics cache
-    invalidate_monthly_statistics_cache
+    MonthlyStatisticsCacheService.invalidate(@production_order)
 
     serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
     tasks_summary = {
@@ -117,7 +117,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     update_assignments if order_assignment_params[:user_ids]
 
     # Invalidate monthly statistics cache
-    invalidate_monthly_statistics_cache
+    MonthlyStatisticsCacheService.invalidate(@production_order)
 
     serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
     tasks_summary = {
@@ -137,7 +137,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     @production_order.destroy!
 
     # Invalidate monthly statistics cache
-    invalidate_monthly_statistics_cache
+    MonthlyStatisticsCacheService.invalidate(@production_order)
 
     render_success(nil, 'Production order deleted successfully')
   end
@@ -183,7 +183,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     current_month_end = Date.current.end_of_month
 
     # Cache key based on user role, user ID (for operators), and current month
-    cache_key = monthly_statistics_cache_key(current_user, current_month_start)
+    cache_key = MonthlyStatisticsCacheService.build_key(current_user, current_month_start)
 
     # Cache expires at the end of current month
     expires_at = current_month_end.end_of_day
@@ -417,46 +417,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
         user_agent: log.user_agent,
         created_at: log.created_at
       }
-    end
-  end
-
-  # Generate cache key for monthly statistics
-  # Key format: monthly_stats/{role}/{user_id_if_operator}/{year}/{month}
-  def monthly_statistics_cache_key(user, month_start)
-    key_parts = ['monthly_stats', user.role, month_start.year, month_start.month]
-
-    # Operators only see their own orders, so include user_id in cache key
-    key_parts.insert(2, user.id) if user.operator?
-
-    key_parts.join('/')
-  end
-
-  # Invalidate monthly statistics cache for current month
-  def invalidate_monthly_statistics_cache
-    current_month_start = Date.current.beginning_of_month
-
-    # Invalidate cache for all roles that might be affected
-    # Admins and production_managers see all orders, so invalidate their cache
-    %w[admin production_manager].each do |role|
-      cache_key = ['monthly_stats', role, current_month_start.year, current_month_start.month].join('/')
-      Rails.cache.delete(cache_key)
-    end
-
-    # For operators, invalidate cache for creator and assigned users
-    if @production_order
-      # Invalidate creator's cache if they're an operator
-      if @production_order.creator&.operator?
-        cache_key = ['monthly_stats', 'operator', @production_order.creator.id,
-                     current_month_start.year, current_month_start.month].join('/')
-        Rails.cache.delete(cache_key)
-      end
-
-      # Invalidate assigned operators' cache
-      @production_order.assigned_users.where(role: :operator).each do |user|
-        cache_key = ['monthly_stats', 'operator', user.id,
-                     current_month_start.year, current_month_start.month].join('/')
-        Rails.cache.delete(cache_key)
-      end
     end
   end
 end

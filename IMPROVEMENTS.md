@@ -690,3 +690,209 @@ end
 - Tests: 269 examples, 0 failures
 
 ---
+
+## 7. Centralizar Estructura de Cache Keys en Service Object
+
+### Cambios
+
+- Creado `MonthlyStatisticsCacheService` para gestionar cache keys y invalidación
+- Eliminados 2 métodos privados de `ProductionOrdersController`
+- Centralizada lógica de cache que estaba dispersa en el controlador
+
+### Archivos modificados
+
+- `app/services/monthly_statistics_cache_service.rb` (nuevo)
+- `app/controllers/api/v1/production_orders_controller.rb` (refactorizado)
+
+### Detalles técnicos
+
+**Antes (lógica dispersa en controlador):**
+
+```ruby
+# En ProductionOrdersController (~37 líneas)
+
+# Método 1: Generar cache key (líneas 425-432)
+def monthly_statistics_cache_key(user, month_start)
+  key_parts = ['monthly_stats', user.role, month_start.year, month_start.month]
+
+  # Operators only see their own orders, so include user_id in cache key
+  key_parts.insert(2, user.id) if user.operator?
+
+  key_parts.join('/')
+end
+
+# Método 2: Invalidar cache (líneas 435-461)
+def invalidate_monthly_statistics_cache
+  current_month_start = Date.current.beginning_of_month
+
+  # Invalidate cache for all roles that might be affected
+  # Admins and production_managers see all orders, so invalidate their cache
+  %w[admin production_manager].each do |role|
+    cache_key = ['monthly_stats', role, current_month_start.year, current_month_start.month].join('/')
+    Rails.cache.delete(cache_key)
+  end
+
+  # For operators, invalidate cache for creator and assigned users
+  if @production_order
+    # Invalidate creator's cache if they're an operator
+    if @production_order.creator&.operator?
+      cache_key = ['monthly_stats', 'operator', @production_order.creator.id,
+                   current_month_start.year, current_month_start.month].join('/')
+      Rails.cache.delete(cache_key)
+    end
+
+    # Invalidate assigned operators' cache
+    @production_order.assigned_users.where(role: :operator).each do |user|
+      cache_key = ['monthly_stats', 'operator', user.id,
+                   current_month_start.year, current_month_start.month].join('/')
+      Rails.cache.delete(cache_key)
+    end
+  end
+end
+
+# Uso en acciones
+def monthly_statistics
+  cache_key = monthly_statistics_cache_key(current_user, current_month_start)
+  # ...
+end
+
+def create
+  # ...
+  invalidate_monthly_statistics_cache
+end
+```
+
+**Después (service object centralizado):**
+
+```ruby
+# En app/services/monthly_statistics_cache_service.rb
+class MonthlyStatisticsCacheService
+  CACHE_KEY_PREFIX = 'monthly_stats'
+  GLOBAL_ROLES = %w[admin production_manager].freeze
+
+  class << self
+    # Generate cache key for monthly statistics
+    def build_key(user, month_start = Date.current.beginning_of_month)
+      key_parts = [CACHE_KEY_PREFIX, user.role, month_start.year, month_start.month]
+
+      # Operators only see their own orders, so include user_id in cache key
+      key_parts.insert(2, user.id) if user.operator?
+
+      key_parts.join('/')
+    end
+
+    # Invalidate monthly statistics cache for the current month
+    # Intelligently invalidates only the caches that might be affected by the order
+    def invalidate(production_order = nil, month_start = Date.current.beginning_of_month)
+      invalidated_keys = []
+
+      # Invalidate cache for all roles that see all orders (admin, production_manager)
+      invalidated_keys += invalidate_global_roles(month_start)
+
+      # Invalidate cache for specific operators affected by this order
+      if production_order
+        invalidated_keys += invalidate_affected_operators(production_order, month_start)
+      end
+
+      invalidated_keys
+    end
+
+    private
+
+    # Invalidate cache for roles that see all orders
+    def invalidate_global_roles(month_start)
+      GLOBAL_ROLES.map do |role|
+        cache_key = [CACHE_KEY_PREFIX, role, month_start.year, month_start.month].join('/')
+        Rails.cache.delete(cache_key)
+        cache_key
+      end
+    end
+
+    # Invalidate cache for operators affected by the production order
+    def invalidate_affected_operators(production_order, month_start)
+      invalidated_keys = []
+
+      # Invalidate creator's cache if they're an operator
+      if production_order.creator&.operator?
+        cache_key = build_operator_key(production_order.creator.id, month_start)
+        Rails.cache.delete(cache_key)
+        invalidated_keys << cache_key
+      end
+
+      # Invalidate assigned operators' cache
+      production_order.assigned_users.where(role: :operator).each do |user|
+        cache_key = build_operator_key(user.id, month_start)
+        Rails.cache.delete(cache_key)
+        invalidated_keys << cache_key
+      end
+
+      invalidated_keys
+    end
+
+    # Build cache key for a specific operator
+    def build_operator_key(operator_id, month_start)
+      [CACHE_KEY_PREFIX, 'operator', operator_id, month_start.year, month_start.month].join('/')
+    end
+  end
+end
+
+# Uso en ProductionOrdersController (mucho más simple)
+def monthly_statistics
+  cache_key = MonthlyStatisticsCacheService.build_key(current_user, current_month_start)
+  # ...
+end
+
+def create
+  # ...
+  MonthlyStatisticsCacheService.invalidate(@production_order)
+end
+
+def update
+  # ...
+  MonthlyStatisticsCacheService.invalidate(@production_order)
+end
+
+def destroy
+  # ...
+  MonthlyStatisticsCacheService.invalidate(@production_order)
+end
+```
+
+### Beneficios
+
+- **Service Object Pattern**: Lógica de cache encapsulada en objeto con responsabilidad única
+- **Mejor organización**: Cache logic separada de la lógica del controlador
+- **Más testeable**: Service object puede ser testeado independientemente
+- **Documentación mejorada**: Métodos bien documentados con ejemplos
+- **Inteligente**: Retorna array de cache keys invalidados (útil para debugging/logging)
+- **Constantes**: `CACHE_KEY_PREFIX` y `GLOBAL_ROLES` como constantes explícitas
+- **Métodos privados**: Lógica de invalidación separada en métodos privados claros
+
+### Características del service object
+
+1. **build_key**: Genera cache key basado en rol y mes (incluye user_id para operators)
+2. **invalidate**: Invalida cache inteligentemente solo para usuarios afectados
+3. **invalidate_global_roles**: Invalida cache para admins y production_managers (ven todas las órdenes)
+4. **invalidate_affected_operators**: Invalida cache solo para operators que crearon o están asignados a la orden
+5. **build_operator_key**: Helper para construir cache key de operador específico
+
+### Formato de cache key
+
+```
+monthly_stats/{role}/{user_id_if_operator}/{year}/{month}
+
+Ejemplos:
+- monthly_stats/admin/2025/12
+- monthly_stats/production_manager/2025/12
+- monthly_stats/operator/123/2025/12  (incluye user_id)
+```
+
+### Impacto
+
+- **~37 líneas de código eliminadas** (2 métodos privados del controlador)
+- Código más limpio y organizado
+- Lógica de cache centralizada en un solo lugar
+- Más fácil de mantener y extender
+- Tests: 269 examples, 0 failures
+
+---
