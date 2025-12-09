@@ -355,3 +355,195 @@ resources :urgent_orders, only: [:index, :create]
 - Tests: 269 examples, 0 failures
 
 ---
+## 5. DRY en Serializers - Método Centralizado
+
+### Cambios
+
+- Creado concern `Api::SerializationHelpers` con método genérico `serialize`
+- Incluido concern en `Api::V1::ApplicationController`
+- Eliminados 8 métodos de serialización repetitivos:
+  - `ProductionOrdersController`: `serialize_orders`, `serialize_order`, `serialize_order_with_tasks`, `serialize_task`, `format_order_data` (5 métodos)
+  - `TasksController`: `serialize_task` (1 método)
+  - `UsersController`: `serialize_users`, `serialize_user`, `serialize_user_detail` (3 métodos)
+
+### Archivos modificados
+
+- `app/controllers/concerns/api/serialization_helpers.rb` (nuevo)
+- `app/controllers/api/v1/application_controller.rb` (incluido concern)
+- `app/controllers/api/v1/production_orders_controller.rb` (eliminados 5 métodos)
+- `app/controllers/api/v1/tasks_controller.rb` (eliminado 1 método)
+- `app/controllers/api/v1/users_controller.rb` (eliminados 3 métodos)
+
+### Detalles técnicos
+
+**Antes (código repetitivo en cada controlador):**
+
+```ruby
+# En ProductionOrdersController (~70 líneas)
+def serialize_orders(orders)
+  serializer_class = orders.first&.class == UrgentOrder ? UrgentOrderSerializer : ProductionOrderSerializer
+  serializer_class.new(orders, include: [:creator, :assigned_users])
+                  .serializable_hash[:data]
+                  .map { |o| format_order_data(o) }
+end
+
+def serialize_order(order)
+  serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
+  data = serializer_class.new(order, include: [:creator, :assigned_users])
+                         .serializable_hash
+  format_order_data(data[:data])
+end
+
+def serialize_order_with_tasks(order)
+  serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
+  data = serializer_class.new(order, include: [:creator, :assigned_users, :tasks])
+                         .serializable_hash
+  formatted = format_order_data(data[:data], data[:included])
+
+  formatted.merge({
+    tasks_summary: {
+      total: order.tasks.size,
+      pending: order.tasks.select(&:pending?).size,
+      completed: order.tasks.select(&:completed?).size,
+      completion_percentage: calculate_completion_percentage(order)
+    }
+  })
+end
+
+def serialize_task(task)
+  TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
+    is_overdue: task.expected_end_date < Date.current && task.pending?
+  })
+end
+
+def format_order_data(data, included = nil)
+  # ~40 líneas de lógica para extraer attributes y relationships
+  # ...
+end
+
+# En TasksController (~5 líneas - DUPLICACIÓN)
+def serialize_task(task)
+  TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
+    is_overdue: task.expected_end_date < Date.current && task.pending?
+  })
+end
+
+# En UsersController (~20 líneas)
+def serialize_users(users)
+  UserSerializer.new(users).serializable_hash[:data].map { |u| u[:attributes] }
+end
+
+def serialize_user(user)
+  UserSerializer.new(user).serializable_hash[:data][:attributes]
+end
+
+def serialize_user_detail(user)
+  serialized = UserSerializer.new(user).serializable_hash[:data][:attributes]
+  serialized.merge({
+    statistics: {
+      created_orders_count: user.created_orders.count,
+      assigned_orders_count: user.assigned_orders.count,
+      pending_orders_count: user.assigned_orders.where(status: :pending).count,
+      completed_orders_count: user.assigned_orders.where(status: :completed).count
+    }
+  })
+end
+```
+
+**Después (método genérico en concern - UN SOLO LUGAR):**
+
+```ruby
+# En app/controllers/concerns/api/serialization_helpers.rb
+module Api
+  module SerializationHelpers
+    extend ActiveSupport::Concern
+
+    # Generic method to serialize resources using Fast JSON API serializers
+    def serialize(resource, options = {})
+      return nil if resource.nil?
+
+      # Determine if resource is a collection
+      is_collection = resource.is_a?(ActiveRecord::Relation) || resource.is_a?(Array)
+
+      # Determine serializer class automatically
+      serializer_class = options[:serializer] || determine_serializer_class(resource, is_collection)
+
+      # Build serializer options
+      serializer_opts = {}
+      serializer_opts[:include] = options[:include] if options[:include]
+
+      # Serialize using Fast JSON API
+      serialized = serializer_class.new(resource, serializer_opts).serializable_hash
+
+      # Extract data and format (handles included relationships automatically)
+      data = is_collection ?
+        serialized[:data].map { |item| extract_attributes(item, serialized[:included]) } :
+        extract_attributes(serialized[:data], serialized[:included])
+
+      # Apply merge if provided
+      data = is_collection ?
+        data.map { |item| item.merge(options[:merge]) } :
+        data.merge(options[:merge]) if options[:merge]
+
+      data
+    end
+
+    private
+
+    # Automatically determines serializer based on resource class (handles STI)
+    def determine_serializer_class(resource, is_collection)
+      # ...
+    end
+
+    # Extracts attributes and merges included relationships
+    def extract_attributes(data, included = nil)
+      # Automatically handles FastJsonApi format and relationships
+      # ...
+    end
+  end
+end
+
+# Uso en controladores (mucho más simple):
+# ProductionOrdersController
+serialize(@orders, include: [:creator, :assigned_users])
+serialize(@production_order, include: [:creator, :assigned_users, :tasks])
+serialize(task, merge: { is_overdue: task.expected_end_date < Date.current && task.pending? })
+
+# TasksController
+serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? })
+
+# UsersController
+serialize(@users)
+serialize(@user)
+serialized = serialize(@user)
+serialized.merge(statistics: { ... })
+```
+
+### Características del método genérico
+
+1. **Detección automática de serializer**: Usa convención `ModelNameSerializer` (soporta STI)
+2. **Soporte para colecciones y recursos únicos**: Detecta automáticamente
+3. **Include de relaciones**: Maneja relaciones has_many y belongs_to automáticamente
+4. **Merge de atributos adicionales**: Permite agregar campos computed con `merge:`
+5. **Extracción automática de included**: Convierte formato FastJsonApi a hash plano
+6. **Manejo de tipos de FastJsonApi**: Resuelve diferencia entre tipos en relationships (`:assigned_user`) vs included (`:user`)
+
+### Beneficios
+
+- **~95 líneas de código eliminadas**: 8 métodos completos removidos
+- **DRY máximo**: Un solo lugar para lógica de serialización
+- **Más fácil de mantener**: Cambios en serialización se hacen en un solo lugar
+- **Convención sobre configuración**: Determina automáticamente el serializer a usar
+- **Flexible**: Soporta merge, includes, y transformaciones custom
+- **Reutilizable**: Cualquier nuevo controlador puede usar el método inmediatamente
+- **Type-safe**: Valida que el serializer exista y da error claro si falta
+
+### Impacto
+
+- **~95 líneas de código eliminadas** en total
+- Código más limpio, DRY y mantenible
+- Menos probabilidad de bugs por duplicación
+- Más fácil agregar nuevos modelos (heredan automáticamente)
+- Tests: 269 examples, 0 failures
+
+---

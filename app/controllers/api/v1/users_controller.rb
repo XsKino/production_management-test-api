@@ -16,7 +16,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
     @users = paginate_collection(@users)
 
     render_success(
-      serialize_users(@users),
+      serialize(@users),
       nil,
       :ok,
       pagination_meta(@users)
@@ -25,7 +25,14 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   # GET /api/v1/users/:id
   def show
-    render_success(serialize_user_detail(@user))
+    serialized = serialize(@user)
+    statistics = {
+      created_orders_count: @user.created_orders.count,
+      assigned_orders_count: @user.assigned_orders.count,
+      pending_orders_count: @user.assigned_orders.where(status: :pending).count,
+      completed_orders_count: @user.assigned_orders.where(status: :completed).count
+    }
+    render_success(serialized.merge(statistics: statistics))
   end
 
   # POST /api/v1/users
@@ -37,7 +44,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
     @user.save!
 
     render_success(
-      serialize_user(@user),
+      serialize(@user),
       'User created successfully',
       :created
     )
@@ -51,7 +58,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
     @user.update!(update_params)
 
     render_success(
-      serialize_user(@user),
+      serialize(@user),
       'User updated successfully'
     )
   end
@@ -81,25 +88,5 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
   def user_self_update_params
     params.require(:user).permit(:name, :email, :password, :password_confirmation)
-  end
-
-  def serialize_users(users)
-    UserSerializer.new(users).serializable_hash[:data].map { |u| u[:attributes] }
-  end
-
-  def serialize_user(user)
-    UserSerializer.new(user).serializable_hash[:data][:attributes]
-  end
-
-  def serialize_user_detail(user)
-    serialized = UserSerializer.new(user).serializable_hash[:data][:attributes]
-    serialized.merge({
-      statistics: {
-        created_orders_count: user.created_orders.count,
-        assigned_orders_count: user.assigned_orders.count,
-        pending_orders_count: user.assigned_orders.where(status: :pending).count,
-        completed_orders_count: user.assigned_orders.where(status: :completed).count
-      }
-    })
   end
 end

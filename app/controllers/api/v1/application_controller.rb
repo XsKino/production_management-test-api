@@ -2,6 +2,7 @@ class Api::V1::ApplicationController < ActionController::API
   include ActionController::HttpAuthentication::Token::ControllerMethods
   include Api::ErrorHandling
   include Api::ResponseHelpers
+  include Api::SerializationHelpers
   include Pundit::Authorization
 
   # Pagination settings

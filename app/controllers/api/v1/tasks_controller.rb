@@ -16,7 +16,7 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     @task.save!
 
     render_success(
-      serialize_task(@task),
+      serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? }),
       'Task created successfully',
       :created
     )
@@ -27,7 +27,7 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     @task.update!(task_params)
 
     render_success(
-      serialize_task(@task),
+      serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? }),
       'Task updated successfully'
     )
   end
@@ -44,7 +44,7 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     @task.update!(status: :completed)
 
     render_success(
-      serialize_task(@task),
+      serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? }),
       'Task marked as completed'
     )
   end
@@ -54,7 +54,7 @@ class Api::V1::TasksController < Api::V1::ApplicationController
     @task.update!(status: :pending)
 
     render_success(
-      serialize_task(@task),
+      serialize(@task, merge: { is_overdue: @task.expected_end_date < Date.current && @task.pending? }),
       'Task reopened'
     )
   end
@@ -72,11 +72,5 @@ class Api::V1::TasksController < Api::V1::ApplicationController
 
   def task_params
     params.require(:task).permit(:description, :expected_end_date, :status)
-  end
-
-  def serialize_task(task)
-    TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
-      is_overdue: task.expected_end_date < Date.current && task.pending?
-    })
   end
 end

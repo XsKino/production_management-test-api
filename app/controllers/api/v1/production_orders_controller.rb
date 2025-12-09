@@ -28,7 +28,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
     # Prepare response with pagination metadata
     render_success(
-      serialize_orders(@orders),
+      serialize(@orders, include: [:creator, :assigned_users]),
       nil,
       :ok,
       pagination_meta(@orders)
@@ -37,7 +37,14 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/:id
   def show
-    render_success(serialize_order_with_tasks(@production_order))
+    serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
+    tasks_summary = {
+      total: @production_order.tasks.size,
+      pending: @production_order.tasks.select(&:pending?).size,
+      completed: @production_order.tasks.select(&:completed?).size,
+      completion_percentage: calculate_completion_percentage(@production_order)
+    }
+    render_success(serialized.merge(tasks_summary: tasks_summary))
   end
 
   # POST /api/v1/production_orders
@@ -74,13 +81,24 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     @production_order.save!
 
     # Assign users if provided
-    assign_users if order_assignment_params[:user_ids].present?
+    if order_assignment_params[:user_ids].present?
+      assign_users
+      # Force reload of associations to ensure they're included
+      @production_order.assigned_users.reload
+    end
 
     # Invalidate monthly statistics cache
     invalidate_monthly_statistics_cache
 
+    serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
+    tasks_summary = {
+      total: @production_order.tasks.size,
+      pending: @production_order.tasks.select(&:pending?).size,
+      completed: @production_order.tasks.select(&:completed?).size,
+      completion_percentage: calculate_completion_percentage(@production_order)
+    }
     render_success(
-      serialize_order_with_tasks(@production_order),
+      serialized.merge(tasks_summary: tasks_summary),
       'Production order created successfully',
       :created
     )
@@ -96,8 +114,15 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     # Invalidate monthly statistics cache
     invalidate_monthly_statistics_cache
 
+    serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
+    tasks_summary = {
+      total: @production_order.tasks.size,
+      pending: @production_order.tasks.select(&:pending?).size,
+      completed: @production_order.tasks.select(&:completed?).size,
+      completion_percentage: calculate_completion_percentage(@production_order)
+    }
     render_success(
-      serialize_order_with_tasks(@production_order),
+      serialized.merge(tasks_summary: tasks_summary),
       'Production order updated successfully'
     )
   end
@@ -115,7 +140,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   # GET /api/v1/production_orders/:id/tasks_summary
   def tasks_summary
     summary = {
-      order: serialize_order(@production_order),
+      order: serialize(@production_order, include: [:creator, :assigned_users]),
       tasks_summary: {
         total_tasks: @production_order.tasks.count,
         pending_tasks: @production_order.tasks.pending.count,
@@ -304,10 +329,12 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     
     serialized_orders = paginated_orders.map do |order|
       expired_tasks = order.tasks.pending.where('expected_end_date < ?', Date.current)
-      
-      serialize_order(order).merge({
+
+      serialize(order, include: [:creator, :assigned_users]).merge({
         expired_tasks_count: expired_tasks.count,
-        expired_tasks: expired_tasks.map { |task| serialize_task(task) }
+        expired_tasks: expired_tasks.map { |task|
+          serialize(task).merge(is_overdue: task.expected_end_date < Date.current && task.pending?)
+        }
       })
     end
 
@@ -376,78 +403,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     assign_users if order_assignment_params[:user_ids].present?
   end
 
-  # Serialization methods
-  def serialize_orders(orders)
-    serializer_class = orders.first&.class == UrgentOrder ? UrgentOrderSerializer : ProductionOrderSerializer
-    serializer_class.new(orders, include: [:creator, :assigned_users])
-                    .serializable_hash[:data]
-                    .map { |o| format_order_data(o) }
-  end
-
-  def serialize_order(order)
-    serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
-    data = serializer_class.new(order, include: [:creator, :assigned_users])
-                           .serializable_hash
-    format_order_data(data[:data])
-  end
-
-  def serialize_order_with_tasks(order)
-    serializer_class = order.is_a?(UrgentOrder) ? UrgentOrderSerializer : ProductionOrderSerializer
-    data = serializer_class.new(order, include: [:creator, :assigned_users, :tasks])
-                           .serializable_hash
-    formatted = format_order_data(data[:data], data[:included])
-
-    formatted.merge({
-      tasks_summary: {
-        total: order.tasks.size,
-        pending: order.tasks.select(&:pending?).size,
-        completed: order.tasks.select(&:completed?).size,
-        completion_percentage: calculate_completion_percentage(order)
-      }
-    })
-  end
-
-  def serialize_task(task)
-    TaskSerializer.new(task).serializable_hash[:data][:attributes].merge({
-      is_overdue: task.expected_end_date < Date.current && task.pending?
-    })
-  end
-
-  private
-
-  def format_order_data(data, included = nil)
-    attributes = data[:attributes]
-    relationships = data[:relationships] || {}
-
-    result = attributes.dup
-
-    # Format creator
-    if relationships[:creator] && included
-      creator_data = included.find { |i| i[:type] == :user && i[:id] == relationships[:creator][:data][:id].to_s }
-      result[:creator] = creator_data[:attributes] if creator_data
-    end
-
-    # Format assigned_users
-    if relationships[:assigned_users] && included
-      result[:assigned_users] = relationships[:assigned_users][:data].map do |user_ref|
-        user_data = included.find { |i| i[:type] == :user && i[:id] == user_ref[:id].to_s }
-        user_data[:attributes] if user_data
-      end.compact
-    end
-
-    # Format tasks if included
-    if relationships[:tasks] && included
-      result[:tasks] = relationships[:tasks][:data].map do |task_ref|
-        task_data = included.find { |i| i[:type] == :task && i[:id] == task_ref[:id].to_s }
-        task_data[:attributes].merge({
-          is_overdue: task_data[:attributes][:expected_end_date] < Date.current &&
-                     task_data[:attributes][:status] == 'pending'
-        }) if task_data
-      end.compact
-    end
-
-    result
-  end
 
   def calculate_completion_percentage(order)
     total_tasks = order.tasks.size
