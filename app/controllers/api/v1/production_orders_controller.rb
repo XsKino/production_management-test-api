@@ -5,21 +5,20 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   }.freeze
 
   # Important order: First fetch, then authorize
-  before_action :set_order_type, only: [:index, :create]
   before_action :set_production_order, only: [:show, :update, :destroy, :tasks_summary, :audit_logs]
 
   # This callback uses the generic authorize_resource from ApplicationController
   before_action :authorize_resource, except: [:create]
 
   # GET /api/v1/production_orders
-  # GET /api/v1/normal_orders
-  # GET /api/v1/urgent_orders
+  # GET /api/v1/normal_orders (via NormalOrdersController)
+  # GET /api/v1/urgent_orders (via UrgentOrdersController)
   def index
     # Apply Pundit scope
     @orders = policy_scope(ProductionOrder)
 
-    # Apply type filter if accessing specific order type routes
-    @orders = @orders.where(type: @order_type) if @order_type
+    # Apply type filter for specific order type controllers
+    @orders = @orders.where(type: order_class.name) if respond_to?(:order_class, true)
 
     # Apply Ransack filtering
     @orders = apply_ransack_filters(@orders, order_ransack_params)
@@ -42,11 +41,31 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   end
 
   # POST /api/v1/production_orders
-  # POST /api/v1/normal_orders
-  # POST /api/v1/urgent_orders
+  # POST /api/v1/normal_orders (via NormalOrdersController)
+  # POST /api/v1/urgent_orders (via UrgentOrdersController)
   def create
-    order_class = @order_type&.constantize || NormalOrder
-    @production_order = order_class.new(production_order_params)
+    # Determine the order class:
+    # 1. Use order_class from child controller if available (NormalOrdersController/UrgentOrdersController)
+    # 2. Otherwise, check params[:production_order][:type] for explicit type specification
+    # 3. Default to NormalOrder if neither is specified
+    klass = if respond_to?(:order_class, true)
+              order_class
+            elsif params.dig(:production_order, :type).present?
+              # Safe constantize with whitelist
+              type_param = params.dig(:production_order, :type)
+              case type_param
+              when 'NormalOrder'
+                NormalOrder
+              when 'UrgentOrder'
+                UrgentOrder
+              else
+                NormalOrder # Default fallback
+              end
+            else
+              NormalOrder # Default
+            end
+
+    @production_order = klass.new(production_order_params)
     @production_order.creator = current_user
 
     # Manual authorization: need to authorize the instance with user-provided data before saving
@@ -307,24 +326,17 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     @production_order = policy_scope(ProductionOrder).find(params[:id])
   end
 
-  def set_order_type
-    # Determine order type from route or params
-    @order_type = case params[:controller]
-                  when 'api/v1/normal_orders'
-                    'NormalOrder'
-                  when 'api/v1/urgent_orders'
-                    'UrgentOrder'
-                  else
-                    params[:production_order]&.[](:type) || params[:type]
-                  end
-  end
-
   def production_order_params
     permitted_params = [:start_date, :expected_end_date, :status,
                        tasks_attributes: [:id, :description, :expected_end_date, :status, :_destroy]]
 
-    # Add deadline for urgent orders
-    permitted_params << :deadline if @order_type == 'UrgentOrder' || params.dig(:production_order, :type) == 'UrgentOrder'
+    # Add deadline for urgent orders (check if controller has order_class method and it's UrgentOrder)
+    if respond_to?(:order_class, true) && order_class == UrgentOrder
+      permitted_params << :deadline
+    elsif params.dig(:production_order, :type) == 'UrgentOrder'
+      # Also allow deadline if type is specified in params (for generic ProductionOrdersController)
+      permitted_params << :deadline
+    end
 
     params.require(:production_order).permit(permitted_params)
   end

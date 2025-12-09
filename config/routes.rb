@@ -40,9 +40,9 @@ Rails.application.routes.draw do
         end
       end
 
-      # Separate routes for different order types
-      resources :normal_orders, controller: :production_orders, type: 'NormalOrder'
-      resources :urgent_orders, controller: :production_orders, type: 'UrgentOrder'
+      # Separate routes for different order types (only index and create)
+      resources :normal_orders, only: [:index, :create]
+      resources :urgent_orders, only: [:index, :create]
 
       # Order assignments
       resources :order_assignments, only: [:create, :destroy]
