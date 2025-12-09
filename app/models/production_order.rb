@@ -30,12 +30,26 @@ class ProductionOrder < ApplicationRecord
   end
 
   # Returns a hash with task statistics and summary
+  # Uses database queries for accuracy, but optimizes by using loaded associations when available
   def tasks_summary
+    # Use loaded tasks if available to avoid extra queries, otherwise query database
+    if tasks.loaded?
+      task_list = tasks.to_a
+      pending_count = task_list.count(&:pending?)
+      completed_count = task_list.count(&:completed?)
+      overdue_count = task_list.count { |t| t.expected_end_date < Date.current && t.pending? }
+    else
+      pending_count = tasks.pending.count
+      completed_count = tasks.completed.count
+      overdue_count = tasks.where('expected_end_date < ? AND status = ?', Date.current, Task.statuses[:pending]).count
+    end
+
     {
-      total: tasks.size,
-      pending: tasks.select(&:pending?).size,
-      completed: tasks.select(&:completed?).size,
-      completion_percentage: calculate_completion_percentage
+      total: tasks.loaded? ? tasks.size : tasks.count,
+      pending: pending_count,
+      completed: completed_count,
+      completion_percentage: calculate_completion_percentage,
+      overdue: overdue_count
     }
   end
 
@@ -67,15 +81,120 @@ class ProductionOrder < ApplicationRecord
     ["assigned_users", "creator", "order_assignments", "tasks"]
   end
 
+  # Class method: Get monthly statistics for a given user and date range
+  # @param user [User] The user for policy scoping
+  # @param month_start [Date] Start of the month
+  # @param month_end [Date] End of the month
+  # @param base_scope [ActiveRecord::Relation] Pre-filtered scope (e.g., from policy_scope)
+  # @return [Hash] Statistics for the current month
+  def self.monthly_statistics_for(base_scope, month_start, month_end)
+    {
+      current_month: {
+        normal_orders_starting: base_scope.where(type: 'NormalOrder')
+                                          .where(start_date: month_start..month_end)
+                                          .count,
+        urgent_orders_with_deadline: base_scope.where(type: 'UrgentOrder')
+                                               .where(deadline: month_start..month_end)
+                                               .count,
+        total_orders_started: base_scope.where(start_date: month_start..month_end).count,
+        completed_orders: base_scope.where(status: :completed)
+                                   .where(updated_at: month_start..month_end)
+                                   .count
+      }
+    }
+  end
+
+  # Class method: Get urgent orders with detailed report including task statistics
+  # Uses lateral join to fetch latest pending task and aggregated statistics
+  # @param base_scope [ActiveRecord::Relation] Pre-filtered scope (e.g., from policy_scope)
+  # @return [ActiveRecord::Relation] Urgent orders with task statistics
+  def self.urgent_orders_with_report(base_scope)
+    # Store statuses in variables for clean interpolation
+    pending_status = Task.statuses[:pending]
+    completed_status = Task.statuses[:completed]
+
+    # Define Lateral Join
+    # Fetches the latest pending task specific to the current order
+    lateral_join_sql = <<~SQL
+      LEFT JOIN LATERAL (
+        SELECT
+          id,
+          description,
+          expected_end_date,
+          status,
+          created_at,
+          updated_at
+        FROM tasks
+        WHERE tasks.production_order_id = production_orders.id
+          AND tasks.status = #{pending_status}
+        ORDER BY id DESC
+        LIMIT 1
+      ) AS latest_task ON true
+    SQL
+
+    # Build the Query
+    base_scope
+      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id") # Join 1: To count global statistics
+      .joins(lateral_join_sql) # Join 2: To fetch specific fields of the latest task
+      .where(type: 'UrgentOrder')
+      .select(
+        "production_orders.*",
+
+        # Latest pending task fields (use ANY_VALUE to avoid GROUP BY errors)
+        "ANY_VALUE(latest_task.id) as latest_pending_task_id",
+        "ANY_VALUE(latest_task.description) as latest_pending_task_description",
+        "ANY_VALUE(latest_task.expected_end_date) as latest_pending_task_expected_end_date",
+        "ANY_VALUE(latest_task.status) as latest_pending_task_status",
+        "ANY_VALUE(latest_task.created_at) as latest_pending_task_created_at",
+        "ANY_VALUE(latest_task.updated_at) as latest_pending_task_updated_at",
+
+        # Aggregated Statistics (using 'tasks' table from first join)
+        "COUNT(CASE WHEN tasks.status = #{pending_status} THEN 1 END) as pending_tasks_count",
+        "COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) as completed_tasks_count",
+        "COUNT(tasks.id) as total_tasks_count",
+        "CASE
+           WHEN COUNT(tasks.id) > 0
+           THEN ROUND(COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) * 100.0 / COUNT(tasks.id), 2)
+           ELSE 0
+         END as completion_percentage"
+      )
+      .group("production_orders.id")
+      .includes(:creator, :assigned_users)
+  end
+
+  # Class method: Get urgent orders with at least one expired pending task
+  # @param base_scope [ActiveRecord::Relation] Pre-filtered scope (e.g., from policy_scope)
+  # @return [ActiveRecord::Relation] Urgent orders with expired tasks
+  def self.urgent_with_expired_tasks(base_scope)
+    base_scope
+      .joins(:tasks)
+      .where(type: 'UrgentOrder')
+      .where(tasks: { 
+        status: Task.statuses[:pending],
+        expected_end_date: ...Date.current 
+      })
+      .distinct
+      .includes(:creator, :assigned_users, :tasks)
+  end
+
   private
 
   # Calculate completion percentage based on completed tasks
+  # Uses loaded tasks if available to avoid extra queries
   def calculate_completion_percentage
-    total_tasks = tasks.size
-    return 0 if total_tasks.zero?
+    if tasks.loaded?
+      total_tasks = tasks.size
+      return 0 if total_tasks.zero?
+      
+      completed_tasks = tasks.count(&:completed?)
+      (completed_tasks.to_f / total_tasks * 100).round(2)
+    else
+      total_tasks = tasks.count
+      return 0 if total_tasks.zero?
 
-    completed_tasks = tasks.select(&:completed?).size
-    (completed_tasks.to_f / total_tasks * 100).round(2)
+      completed_tasks = tasks.completed.count
+      (completed_tasks.to_f / total_tasks * 100).round(2)
+    end
   end
 
   # Validate that expected_end_date is not before start_date

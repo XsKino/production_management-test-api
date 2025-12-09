@@ -10,7 +10,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
 
     # Apply basic filtering if needed
     @users = @users.where(role: params[:role]) if params[:role].present?
-    @users = @users.where('name ILIKE ? OR email ILIKE ?', "%#{params[:search]}%", "%#{params[:search]}%") if params[:search].present?
+    @users = @users.search_by_name_or_email(params[:search])
 
     # Apply pagination
     @users = paginate_collection(@users)

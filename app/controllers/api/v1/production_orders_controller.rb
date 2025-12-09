@@ -128,15 +128,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   def tasks_summary
     summary = {
       order: serialize(@production_order, include: [:creator, :assigned_users]),
-      tasks_summary: {
-        total_tasks: @production_order.tasks.count,
-        pending_tasks: @production_order.tasks.pending.count,
-        completed_tasks: @production_order.tasks.completed.count,
-        completion_percentage: calculate_completion_percentage(@production_order),
-        latest_pending_task_date: @production_order.tasks.pending.maximum(:expected_end_date),
-        overdue_tasks: @production_order.tasks.where('expected_end_date < ? AND status = ?',
-                                                    Date.current, Task.statuses[:pending]).count
-      }
+      tasks_summary: @production_order.tasks_summary
     }
 
     render_success(summary)
@@ -171,23 +163,9 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     expires_at = current_month_end.end_of_day
 
     stats = Rails.cache.fetch(cache_key, expires_at: expires_at) do
-      # Get orders accessible to current user
+      # Get orders accessible to current user and delegate to model
       base_orders = policy_scope(ProductionOrder)
-
-      {
-        current_month: {
-          normal_orders_starting: base_orders.where(type: 'NormalOrder')
-                                            .where(start_date: current_month_start..current_month_end)
-                                            .count,
-          urgent_orders_with_deadline: base_orders.where(type: 'UrgentOrder')
-                                                 .where(deadline: current_month_start..current_month_end)
-                                                 .count,
-          total_orders_started: base_orders.where(start_date: current_month_start..current_month_end).count,
-          completed_orders: base_orders.where(status: :completed)
-                                     .where(updated_at: current_month_start..current_month_end)
-                                     .count
-        }
-      }
+      ProductionOrder.monthly_statistics_for(base_orders, current_month_start, current_month_end)
     end
 
     render_success(stats)
@@ -195,57 +173,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/urgent_orders_report
   def urgent_orders_report
-    # Store statuses in variables for clean interpolation
-    pending_status = Task.statuses[:pending]
-    completed_status = Task.statuses[:completed]
-
-    # Define Lateral Join
-    # Fetches the latest pending task specific to the current order
-    lateral_join_sql = <<~SQL
-      LEFT JOIN LATERAL (
-        SELECT
-          id,
-          description,
-          expected_end_date,
-          status,
-          created_at,
-          updated_at
-        FROM tasks
-        WHERE tasks.production_order_id = production_orders.id
-          AND tasks.status = #{pending_status}
-        ORDER BY id DESC
-        LIMIT 1
-      ) AS latest_task ON true
-    SQL
-
-    # Build the Query
-    urgent_orders_with_stats = policy_scope(ProductionOrder)
-      .joins("LEFT JOIN tasks ON tasks.production_order_id = production_orders.id") # Join 1: To count global statistics
-      .joins(lateral_join_sql) # Join 2: To fetch specific fields of the latest task
-      .where(type: 'UrgentOrder')
-      .select(
-        "production_orders.*",
-
-        # Latest pending task fields (use ANY_VALUE to avoid GROUP BY errors)
-        "ANY_VALUE(latest_task.id) as latest_pending_task_id",
-        "ANY_VALUE(latest_task.description) as latest_pending_task_description",
-        "ANY_VALUE(latest_task.expected_end_date) as latest_pending_task_expected_end_date",
-        "ANY_VALUE(latest_task.status) as latest_pending_task_status",
-        "ANY_VALUE(latest_task.created_at) as latest_pending_task_created_at",
-        "ANY_VALUE(latest_task.updated_at) as latest_pending_task_updated_at",
-
-        # Aggregated Statistics (using 'tasks' table from first join)
-        "COUNT(CASE WHEN tasks.status = #{pending_status} THEN 1 END) as pending_tasks_count",
-        "COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) as completed_tasks_count",
-        "COUNT(tasks.id) as total_tasks_count",
-        "CASE
-           WHEN COUNT(tasks.id) > 0
-           THEN ROUND(COUNT(CASE WHEN tasks.status = #{completed_status} THEN 1 END) * 100.0 / COUNT(tasks.id), 2)
-           ELSE 0
-         END as completion_percentage"
-      )
-      .group("production_orders.id")
-      .includes(:creator, :assigned_users)
+    # Delegate complex query to model
+    urgent_orders_with_stats = ProductionOrder.urgent_orders_with_report(policy_scope(ProductionOrder))
 
     paginated_orders = paginate_collection(urgent_orders_with_stats)
 
@@ -301,16 +230,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
   # GET /api/v1/production_orders/urgent_with_expired_tasks
   def urgent_with_expired_tasks
-    # Find urgent orders with at least one pending task that's overdue
-    urgent_orders_with_expired = policy_scope(ProductionOrder)
-      .joins(:tasks)
-      .where(type: 'UrgentOrder')
-      .where(tasks: { 
-        status: Task.statuses[:pending],
-        expected_end_date: ...Date.current 
-      })
-      .distinct
-      .includes(:creator, :assigned_users, :tasks)
+    # Delegate query to model
+    urgent_orders_with_expired = ProductionOrder.urgent_with_expired_tasks(policy_scope(ProductionOrder))
 
     paginated_orders = paginate_collection(urgent_orders_with_expired)
     

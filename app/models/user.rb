@@ -12,13 +12,27 @@ class User < ApplicationRecord
   validates :name, presence: true
   validates :role, presence: true
 
-  # Returns statistics about orders in a single query
+  # Scope: Search users by name or email (case-insensitive)
+  scope :search_by_name_or_email, ->(term) {
+    where('name ILIKE ? OR email ILIKE ?', "%#{term}%", "%#{term}%") if term.present?
+  }
+
+  # Returns statistics about orders in a single aggregated query
+  # More efficient than making 4 separate queries
   def order_statistics
+    # Get counts for created orders
+    created_count = created_orders.count
+
+    # Get all assigned order statistics in a single query
+    assigned_stats = assigned_orders
+      .group(:status)
+      .count
+
     {
-      created_orders_count: created_orders.count,
-      assigned_orders_count: assigned_orders.count,
-      pending_orders_count: assigned_orders.where(status: :pending).count,
-      completed_orders_count: assigned_orders.where(status: :completed).count
+      created_orders_count: created_count,
+      assigned_orders_count: assigned_stats.values.sum,
+      pending_orders_count: assigned_stats['pending'] || 0,
+      completed_orders_count: assigned_stats['completed'] || 0
     }
   end
 

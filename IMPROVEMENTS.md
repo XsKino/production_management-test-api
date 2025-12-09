@@ -254,18 +254,64 @@ MonthlyStatisticsCacheService.invalidate(@production_order)
 
 ---
 
+## 9. Refactorizar Controllers - Mover Queries SQL a Modelos
+
+**Qué se hizo:**
+
+- Movidas consultas SQL complejas de controllers a modelos
+- Creados 3 métodos de clase en `ProductionOrder`
+- Creado scope de búsqueda en `User`
+- Optimizadas queries para usar asociaciones precargadas cuando están disponibles
+
+**ProductionOrder - Nuevos métodos:**
+
+1. `self.monthly_statistics_for(base_scope, month_start, month_end)`
+   - Estadísticas mensuales (antes 20 líneas en controller)
+2. `self.urgent_orders_with_report(base_scope)`
+   - Query complejo con LATERAL JOIN (MySQL)
+   - Obtiene última tarea pendiente + estadísticas agregadas
+   - Antes: 105 líneas en controller
+3. `self.urgent_with_expired_tasks(base_scope)`
+
+   - Órdenes urgentes con tareas vencidas
+   - Antes: 12 líneas en controller
+
+4. Mejorado `tasks_summary` (optimización inteligente)
+   - Usa `.loaded?` para evitar queries extras
+   - Si tasks están precargados: usa memoria
+   - Si no: usa database queries
+
+**User - Nuevos métodos:**
+
+1. `scope :search_by_name_or_email`
+   - Búsqueda ILIKE reutilizable
+2. Mejorado `order_statistics`
+   - Antes: 4 queries separadas
+   - Después: 2 queries (1 + 1 agregada con GROUP BY)
+
+**Resultado:**
+
+- **ProductionOrdersController:** 380 → ~280 líneas (26% reducción)
+- **UsersController:** Simplificado index action
+- Queries complejas en modelos (reutilizables)
+- Performance mantenida (tests de performance pasan)
+- Tests: ✅ 269 passing
+
+---
+
 ## Resumen Total
 
-| Mejora                     | Líneas Eliminadas | Beneficio Principal |
-| -------------------------- | ----------------- | ------------------- |
-| 1. Error Handling          | ~80               | Consistencia        |
-| 2. LATERAL JOIN            | -                 | Performance         |
-| 3. Authorization Callbacks | ~60               | Seguridad + DRY     |
-| 4. Controllers Separados   | ~14               | Seguridad           |
-| 5. Serializers DRY         | ~95               | DRY                 |
-| 6. Strong Params Pundit    | ~25               | Centralización      |
-| 7. Cache Service           | ~37               | Service Object      |
-| 8. Fat Models              | ~28               | Lógica en modelos   |
-| **TOTAL**                  | **~339 líneas**   | Código más limpio   |
+| Mejora                     | Líneas Eliminadas | Beneficio Principal     |
+| -------------------------- | ----------------- | ----------------------- |
+| 1. Error Handling          | ~80               | Consistencia            |
+| 2. LATERAL JOIN            | -                 | Performance             |
+| 3. Authorization Callbacks | ~60               | Seguridad + DRY         |
+| 4. Controllers Separados   | ~14               | Seguridad               |
+| 5. Serializers DRY         | ~95               | DRY                     |
+| 6. Strong Params Pundit    | ~25               | Centralización          |
+| 7. Cache Service           | ~37               | Service Object          |
+| 8. Fat Models              | ~28               | Lógica en modelos       |
+| 9. SQL Queries a Modelos   | ~100              | Reusabilidad + DRY      |
+| **TOTAL**                  | **~439 líneas**   | Código más limpio y DRY |
 
 **Tests:** ✅ 269 examples, 0 failures
