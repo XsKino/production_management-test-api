@@ -38,13 +38,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
   # GET /api/v1/production_orders/:id
   def show
     serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
-    tasks_summary = {
-      total: @production_order.tasks.size,
-      pending: @production_order.tasks.select(&:pending?).size,
-      completed: @production_order.tasks.select(&:completed?).size,
-      completion_percentage: calculate_completion_percentage(@production_order)
-    }
-    render_success(serialized.merge(tasks_summary: tasks_summary))
+    render_success(serialized.merge(tasks_summary: @production_order.tasks_summary))
   end
 
   # POST /api/v1/production_orders
@@ -86,7 +80,7 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
 
     # Assign users if provided
     if order_assignment_params[:user_ids].present?
-      assign_users
+      @production_order.assign_users!(order_assignment_params[:user_ids])
       # Force reload of associations to ensure they're included
       @production_order.assigned_users.reload
     end
@@ -95,14 +89,8 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     MonthlyStatisticsCacheService.invalidate(@production_order)
 
     serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
-    tasks_summary = {
-      total: @production_order.tasks.size,
-      pending: @production_order.tasks.select(&:pending?).size,
-      completed: @production_order.tasks.select(&:completed?).size,
-      completion_percentage: calculate_completion_percentage(@production_order)
-    }
     render_success(
-      serialized.merge(tasks_summary: tasks_summary),
+      serialized.merge(tasks_summary: @production_order.tasks_summary),
       'Production order created successfully',
       :created
     )
@@ -114,20 +102,14 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
     @production_order.update!(params.require(:production_order).permit(permitted_attrs))
 
     # Update assignments if provided
-    update_assignments if order_assignment_params[:user_ids]
+    @production_order.update_assignments!(order_assignment_params[:user_ids]) if order_assignment_params[:user_ids]
 
     # Invalidate monthly statistics cache
     MonthlyStatisticsCacheService.invalidate(@production_order)
 
     serialized = serialize(@production_order, include: [:creator, :assigned_users, :tasks])
-    tasks_summary = {
-      total: @production_order.tasks.size,
-      pending: @production_order.tasks.select(&:pending?).size,
-      completed: @production_order.tasks.select(&:completed?).size,
-      completion_percentage: calculate_completion_percentage(@production_order)
-    }
     render_success(
-      serialized.merge(tasks_summary: tasks_summary),
+      serialized.merge(tasks_summary: @production_order.tasks_summary),
       'Production order updated successfully'
     )
   end
@@ -376,30 +358,6 @@ class Api::V1::ProductionOrdersController < Api::V1::ApplicationController
       order_number_eq: nil,
       assigned_users_id_eq: nil
     }
-  end
-
-  def assign_users
-    user_ids = order_assignment_params[:user_ids].compact.uniq
-    user_ids.each do |user_id|
-      @production_order.order_assignments.find_or_create_by(user_id: user_id)
-    end
-  end
-
-  def update_assignments
-    # Remove existing assignments
-    @production_order.order_assignments.destroy_all
-    
-    # Add new assignments
-    assign_users if order_assignment_params[:user_ids].present?
-  end
-
-
-  def calculate_completion_percentage(order)
-    total_tasks = order.tasks.size
-    return 0 if total_tasks.zero?
-
-    completed_tasks = order.tasks.select(&:completed?).size
-    (completed_tasks.to_f / total_tasks * 100).round(2)
   end
 
   def serialize_audit_logs(audit_logs)

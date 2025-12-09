@@ -26,13 +26,7 @@ class Api::V1::UsersController < Api::V1::ApplicationController
   # GET /api/v1/users/:id
   def show
     serialized = serialize(@user)
-    statistics = {
-      created_orders_count: @user.created_orders.count,
-      assigned_orders_count: @user.assigned_orders.count,
-      pending_orders_count: @user.assigned_orders.where(status: :pending).count,
-      completed_orders_count: @user.assigned_orders.where(status: :completed).count
-    }
-    render_success(serialized.merge(statistics: statistics))
+    render_success(serialized.merge(statistics: @user.order_statistics))
   end
 
   # POST /api/v1/users

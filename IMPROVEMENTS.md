@@ -232,6 +232,28 @@ MonthlyStatisticsCacheService.invalidate(@production_order)
 
 ---
 
+## 8. Aplicar principio "Fat Models, Skinny Controllers"
+
+**Qué se hizo:**
+
+- Creado `tasks_summary` en ProductionOrder (retorna hash con estadísticas)
+- Creado `assign_users!` y `update_assignments!` en ProductionOrder
+- Movido `calculate_completion_percentage` como método privado del modelo
+- Creado `order_statistics` en User (retorna hash con counts)
+- Eliminados 3 bloques duplicados de tasks_summary del controlador
+- Eliminados 3 métodos privados de ProductionOrdersController
+- Eliminado hash manual de estadísticas en UsersController
+
+**Resultado:**
+
+- **~28 líneas eliminadas** (23 en ProductionOrders + 5 en Users)
+- Lógica de negocio centralizada en modelos
+- Queries más eficientes (4 queries → 1 en User)
+- Código reutilizable en toda la app
+- Tests: ✅ 269 passing
+
+---
+
 ## Resumen Total
 
 | Mejora                     | Líneas Eliminadas | Beneficio Principal |
@@ -243,6 +265,7 @@ MonthlyStatisticsCacheService.invalidate(@production_order)
 | 5. Serializers DRY         | ~95               | DRY                 |
 | 6. Strong Params Pundit    | ~25               | Centralización      |
 | 7. Cache Service           | ~37               | Service Object      |
-| **TOTAL**                  | **~311 líneas**   | Código más limpio   |
+| 8. Fat Models              | ~28               | Lógica en modelos   |
+| **TOTAL**                  | **~339 líneas**   | Código más limpio   |
 
 **Tests:** ✅ 269 examples, 0 failures

@@ -29,6 +29,34 @@ class ProductionOrder < ApplicationRecord
     creator_id == user.id || assigned_users.include?(user)
   end
 
+  # Returns a hash with task statistics and summary
+  def tasks_summary
+    {
+      total: tasks.size,
+      pending: tasks.select(&:pending?).size,
+      completed: tasks.select(&:completed?).size,
+      completion_percentage: calculate_completion_percentage
+    }
+  end
+
+  # Assign users to this order
+  def assign_users!(user_ids)
+    return if user_ids.blank?
+
+    user_ids = user_ids.compact.uniq
+    user_ids.each do |user_id|
+      order_assignments.find_or_create_by(user_id: user_id)
+    end
+  end
+
+  # Update user assignments (replaces existing assignments)
+  def update_assignments!(user_ids)
+    return if user_ids.blank?
+
+    order_assignments.destroy_all
+    assign_users!(user_ids)
+  end
+
   # Ransack: Define searchable attributes
   def self.ransackable_attributes(auth_object = nil)
     ["created_at", "creator_id", "deadline", "expected_end_date", "id", "order_number", "start_date", "status", "type", "updated_at"]
@@ -40,6 +68,15 @@ class ProductionOrder < ApplicationRecord
   end
 
   private
+
+  # Calculate completion percentage based on completed tasks
+  def calculate_completion_percentage
+    total_tasks = tasks.size
+    return 0 if total_tasks.zero?
+
+    completed_tasks = tasks.select(&:completed?).size
+    (completed_tasks.to_f / total_tasks * 100).round(2)
+  end
 
   # Validate that expected_end_date is not before start_date
   def expected_end_date_after_start_date

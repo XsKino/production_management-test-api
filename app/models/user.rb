@@ -12,6 +12,16 @@ class User < ApplicationRecord
   validates :name, presence: true
   validates :role, presence: true
 
+  # Returns statistics about orders in a single query
+  def order_statistics
+    {
+      created_orders_count: created_orders.count,
+      assigned_orders_count: assigned_orders.count,
+      pending_orders_count: assigned_orders.where(status: :pending).count,
+      completed_orders_count: assigned_orders.where(status: :completed).count
+    }
+  end
+
   # Ransack: Define searchable attributes
   def self.ransackable_attributes(auth_object = nil)
     ["created_at", "email", "id", "name", "role", "updated_at"]
