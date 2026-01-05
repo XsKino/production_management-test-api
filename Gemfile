@@ -5,7 +5,7 @@ gem "mysql2", "~> 0.5"
 gem "puma", ">= 5.0"
 
 # Auth
-gem "bcrypt", "~> 3.1.7"
+gem "bcrypt", "~> 3.1.21"
 gem "jwt"
 gem "pundit"
 
